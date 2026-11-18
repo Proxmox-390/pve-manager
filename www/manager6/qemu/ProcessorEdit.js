@@ -115,6 +115,14 @@ Ext.define('PVE.qemu.ProcessorInputPanel', {
         me.arch = arch;
         me.lookup('cputype').setArch(arch);
         me.lookup('cpuFlags').setArch(arch);
+
+        // s390x VMs have no NUMA nodes and qemu-server does not hot-plug their vCPUs
+        let s390x = arch === 's390x';
+        for (const name of ['vcpus', 'numa']) {
+            let field = me.down(`field[name=${name}]`);
+            field.setHidden(s390x);
+            field.setDisabled(s390x);
+        }
     },
 
     setKvm: function (kvm) {

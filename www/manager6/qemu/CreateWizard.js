@@ -160,7 +160,16 @@ Ext.define('PVE.qemu.CreateWizard', {
             // we can't set an architecture if we don't have a nodename
             return;
         }
-        let arch = me.lookup('archSelector').getValue();
+        // s390x nodes only run s390x VMs (KVM only), there is no architecture to choose
+        let s390xNode = PVE.qemu.Architecture.getNodeArchitecture(nodename) === 's390x';
+        let archSelector = me.lookup('archSelector');
+        archSelector.setHidden(s390xNode);
+        archSelector.setDisabled(s390xNode);
+        if (s390xNode && archSelector.getValue() !== '__default__') {
+            archSelector.setValue('__default__');
+            return; // set again by the change event
+        }
+        let arch = archSelector.getValue();
         if (arch === '__default__') {
             arch = undefined;
         }
