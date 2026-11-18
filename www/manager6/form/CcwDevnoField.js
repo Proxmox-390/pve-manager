@@ -10,9 +10,30 @@
 //       of devices added in the wizard but not created yet
 //   autoSuggest: fill in the suggestion when the field is empty (default true); call
 //       suggest() to (re)load it explicitly, e.g. after setting the vmid
+//   count: the consecutive device numbers the device(s) use from this one (qeth: 3)
+//
+// In the creation wizard, the device numbers of the other address fields of the wizard count as
+// used too: the suggestion skips them and the field is invalid if it overlaps one.
 Ext.define('PVE.form.CcwDevnoField', {
     extend: 'Ext.form.field.Text',
     alias: ['widget.pveCcwDevnoField'],
+
+    statics: {
+        // 0.<ssid>.<devno> of 'count' consecutive device numbers from 'value', [] if invalid
+        expand: function (value, count) {
+            let match = /^(?:0\.([0-3])\.)?([0-9a-f]{1,4})$/i.exec(value ?? '');
+            if (!match) {
+                return [];
+            }
+            let [, ssid = '0', devno] = match;
+            let first = parseInt(devno, 16);
+            let res = [];
+            for (let i = 0; i < (count ?? 1) && first + i <= 0xffff; i++) {
+                res.push(`0.${ssid}.${(first + i).toString(16).padStart(4, '0')}`);
+            }
+            return res;
+        },
+    },
 
     fieldLabel: gettext('Address'),
     emptyText: '0.0.xxxx',
@@ -23,6 +44,36 @@ Ext.define('PVE.form.CcwDevnoField', {
     vmid: undefined,
     getUsedDevnos: undefined,
     autoSuggest: true,
+    count: 1,
+
+    // the device numbers of the other address fields of the creation wizard
+    getWizardDevnos: function () {
+        let me = this;
+        let wizard = me.up('pveQemuCreateWizard');
+        if (!wizard) {
+            return [];
+        }
+        return wizard
+            .query('pveCcwDevnoField')
+            .filter((field) => field !== me && !field.isDisabled())
+            .flatMap((field) => PVE.form.CcwDevnoField.expand(field.getValue(), field.count));
+    },
+
+    setCount: function (count) {
+        let me = this;
+        me.count = count;
+        me.validate();
+    },
+
+    validator: function (value) {
+        let me = this;
+        let used = me.getWizardDevnos();
+        let own = PVE.form.CcwDevnoField.expand(value, me.count);
+        if (own.some((devno) => used.includes(devno))) {
+            return gettext('The address is used by another device of the VM');
+        }
+        return true;
+    },
 
     // like qemu-server: 0.<ssid>.<devno> or just the 3 or 4 hex digits of the device number
     regex: /^(?:0\.[0-3]\.[0-9a-fA-F]{1,4}|[0-9a-fA-F]{3,4})$/,
@@ -54,7 +105,7 @@ Ext.define('PVE.form.CcwDevnoField', {
         }
         let params = { kind: me.kind };
         let used = me.getUsedDevnos ? me.getUsedDevnos() : [];
-        used = (used || []).filter((devno) => !!devno);
+        used = [...(used || []), ...me.getWizardDevnos()].filter((devno) => !!devno);
         if (used.length) {
             params.used = used.join(',');
         }

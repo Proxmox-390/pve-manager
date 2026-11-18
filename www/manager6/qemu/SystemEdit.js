@@ -140,12 +140,23 @@ Ext.define('PVE.qemu.SystemInputPanel', {
                 hidden: '{!isS390x}',
                 disabled: '{!isS390x}',
             },
+            listeners: {
+                // the terminals use consecutive addresses from the first one
+                change: function (field, value) {
+                    field
+                        .up('inputpanel')
+                        .lookup('terminaldevno')
+                        .setCount(value || 0);
+                },
+            },
         },
         {
             xtype: 'pveCcwDevnoField',
             name: 'terminaldevno',
+            reference: 'terminaldevno',
             fieldLabel: gettext('First Address'),
             kind: '3270',
+            count: 0,
             autoSuggest: false, // a new VM, the 3270 range starts there
             value: '0.0.0700',
             hidden: true,

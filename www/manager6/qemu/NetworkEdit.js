@@ -200,6 +200,7 @@ Ext.define('PVE.qemu.NetworkInputPanel', {
                 xtype: 'pveCcwDevnoField',
                 name: 'devno',
                 kind: 'qeth',
+                count: 3,
                 nodename: me.nodename,
                 hidden: true,
                 disabled: true,
