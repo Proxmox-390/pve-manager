@@ -63,7 +63,22 @@ Ext.define('PVE.panel.GuestStatusView', {
                 if (qmpstatus && qmpstatus !== record.data.status) {
                     text += ' (' + qmpstatus + ')';
                 }
+                if (qmpstatus === 'guest-panicked') {
+                    text = `<span class="critical">${text}</span>`;
+                }
                 return text;
+            },
+        },
+        {
+            itemId: 'panic',
+            iconCls: 'fa fa-exclamation-triangle fa-fw critical',
+            title: gettext('Guest panicked'),
+            printBar: false,
+            hidden: true,
+            textField: 'panic-info',
+            renderer: function (info) {
+                this.setVisible(!!info);
+                return PVE.Utils.render_guest_panic_info(info);
             },
         },
         {

@@ -1085,6 +1085,35 @@ Ext.define('PVE.Utils', {
             return schema?.name ?? value;
         },
 
+        // the 'panic-info' of the QEMU VM status: crash information of the CPU that crashed
+        render_guest_panic_info: function (info) {
+            if (!info) {
+                return '';
+            }
+            let text;
+            if (info.type === 's390') {
+                let reasons = {
+                    'disabled-wait': gettext('Disabled wait'),
+                    'extint-loop': gettext('External interrupt loop'),
+                    'pgmint-loop': gettext('Program interrupt loop'),
+                    'opint-loop': gettext('Operation exception loop'),
+                };
+                text = `PSW ${info['psw-mask']} ${info['psw-addr']}`;
+                if (info.reason && info.reason !== 'unknown') {
+                    text = `${reasons[info.reason] ?? info.reason}: ${text}`;
+                }
+                if (info.core !== undefined) {
+                    text += ` (${Ext.String.format(gettext('CPU core {0}'), info.core)})`;
+                }
+            } else if (info.type === 'hyper-v') {
+                let args = [info.arg2, info.arg3, info.arg4, info.arg5].map((arg) => `0x${arg}`);
+                text = `0x${info.arg1} (${args.join(', ')})`;
+            } else {
+                text = info.type;
+            }
+            return Ext.htmlEncode(text);
+        },
+
         format_ha: function (value) {
             var text = Proxmox.Utils.noneText;
 
