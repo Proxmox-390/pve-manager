@@ -52,6 +52,10 @@ Ext.define('PVE.qemu.MachineInputPanel', {
                 defaultMachine = 'i440fx'; // the default in the backend is 'pc' which means 'i440fx' for the qemu machinetype
             }
             let type = machineType === 'q35' ? 'q35' : defaultMachine;
+            if (arch === 's390x' && machineType && machineType !== '__default__') {
+                // the versions of the virtio machine, unversioned machine types have none
+                type = machineType;
+            }
             let store = me.lookup('version').getStore();
             store.clearFilter();
             store.addFilter((val) => val.data.id === 'latest' || val.data.type === type);
@@ -97,6 +101,25 @@ Ext.define('PVE.qemu.MachineInputPanel', {
 
         let defaultMachine = PVE.qemu.Architecture.defaultMachines[values.arch];
         me.isWindows = values.isWindows;
+        if (values.arch === 's390x') {
+            // explicit values only, see PVE.form.QemuMachineSelector
+            let machine = values.machine;
+            if (!machine || machine === '__default__') {
+                machine = defaultMachine;
+            }
+            values.viommu = '__default__';
+            values.machine = machine;
+            if (machine.startsWith(`${defaultMachine}-`)) {
+                values.version = machine;
+                values.machine = defaultMachine;
+                me.setAdvancedVisible(true);
+            }
+            me.lookup('machine').setNodename(values.nodename);
+            this.callParent(arguments);
+            this.getController().setVersionFilter(values.machine);
+            this.getController().setArch(values.arch);
+            return;
+        }
         if (values.machine === defaultMachine) {
             values.machine = '__default__';
         }
@@ -273,6 +296,7 @@ Ext.define('PVE.qemu.MachineEdit', {
                 };
                 values.isWindows = PVE.Utils.is_windows(conf.ostype);
                 values.arch = PVE.qemu.Architecture.getGuestArchitecture(conf.arch, me.nodename);
+                values.nodename = me.nodename;
                 if (conf.meta) {
                     let meta = PVE.Parser.parsePropertyString(conf.meta);
                     values.creationQemu = meta['creation-qemu'];

@@ -14,6 +14,10 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             efidisk: function (get) {
                 return get('efi') && get('addefi');
             },
+            // s390x has no graphic card, SCSI controller choice (always virtio), BIOS or TPM
+            isS390x: function (get) {
+                return get('current.architecture') === 's390x';
+            },
         },
     },
 
@@ -42,6 +46,13 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             }
         },
 
+        machineChange: function (field, value) {
+            var me = this;
+            if (me.getView().insideWizard) {
+                me.getViewModel().set('current.machine', value);
+            }
+        },
+
         biosChange: function (field, value) {
             var me = this;
             if (me.getView().insideWizard) {
@@ -55,6 +66,9 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             },
             pveQemuBiosSelector: {
                 change: 'biosChange',
+            },
+            pveQemuMachineSelector: {
+                change: 'machineChange',
             },
             '#': {
                 afterrender: 'setDefaults',
@@ -73,6 +87,9 @@ Ext.define('PVE.qemu.SystemInputPanel', {
                 me.lookup('addtpmbox').setValue(true);
             }
 
+            if (architecture === 's390x') {
+                return; // the machine selector selects the default for new VMs itself
+            }
             me.lookup('vga').setValue(defaults.vga ?? '__default__');
             me.lookup('machine').setValue(defaults.machine ?? '__default__');
             me.lookup('bios').setValue(defaults.bios ?? '__default__');
@@ -88,6 +105,10 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             name: 'vga',
             reference: 'vga',
             comboItems: Object.entries(PVE.Utils.kvm_vga_drivers),
+            bind: {
+                hidden: '{isS390x}',
+                disabled: '{isS390x}',
+            },
         },
         {
             xtype: 'pveQemuMachineSelector',
@@ -95,13 +116,18 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             reference: 'machine',
             value: '__default__',
             fieldLabel: gettext('Machine'),
+            selectNewVmDefault: true,
             bind: {
                 category: '{current.architecture}',
+                nodename: '{nodename}',
             },
         },
         {
             xtype: 'displayfield',
             value: gettext('Firmware'),
+            bind: {
+                hidden: '{isS390x}',
+            },
         },
         {
             xtype: 'pveQemuBiosSelector',
@@ -111,6 +137,8 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             fieldLabel: 'BIOS',
             bind: {
                 category: '{current.architecture}',
+                hidden: '{isS390x}',
+                disabled: '{isS390x}',
             },
         },
         {
@@ -151,6 +179,8 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             bind: {
                 category: '{current.architecture}',
                 value: '{current.scsihw}',
+                hidden: '{isS390x}',
+                disabled: '{isS390x}',
             },
             fieldLabel: gettext('SCSI Controller'),
         },
@@ -172,6 +202,8 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             reference: 'addtpmbox',
             bind: {
                 value: '{addtpm}',
+                hidden: '{isS390x}',
+                disabled: '{isS390x}',
             },
             submitValue: false,
             fieldLabel: gettext('Add TPM'),
