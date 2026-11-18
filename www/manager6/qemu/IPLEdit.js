@@ -1,5 +1,6 @@
 // IPL (initial program load) settings of s390x VMs with a non-Linux OS type, which IPL directly
-// from a CCW device: the device and an optional load parameter.
+// from a CCW device: the device, one of the IPL-capable CCW devices qemu-server lists for the VM,
+// and an optional load parameter.
 Ext.define('PVE.qemu.IPLInputPanel', {
     extend: 'Proxmox.panel.InputPanel',
     alias: 'widget.pveQemuIPLInputPanel',
@@ -15,18 +16,28 @@ Ext.define('PVE.qemu.IPLInputPanel', {
         return { ipl: PVE.Parser.printPropertyString(ipl, 'device') };
     },
 
-    setVMConfig: function (vmconfig) {
+    // ipl-devices: [{ key, type, devno, description }], the IPL-capable CCW devices of the VM
+    setIPLDevices: function (devices) {
         let me = this;
 
-        let isCloudinit = (v) => v.match(/media=cdrom/) && v.match(/[:/]vm-\d+-cloudinit/);
-        let disks = Object.keys(vmconfig)
-            .filter((key) => PVE.Utils.bus_match.test(key) && !isCloudinit(vmconfig[key]))
-            .sort()
-            .map((key) => [key, `${key} (${vmconfig[key].split(',')[0]})`]);
-        me.down('field[name=device]').setComboItems([
-            ['__default__', Proxmox.Utils.defaultText],
-            ...disks,
-        ]);
+        let items = devices.map(({ key, type, devno, description }) => {
+            let details = [type, devno].filter((v) => v).join(', ');
+            let text = details ? `${key} (${details})` : key;
+            return [key, description ? `${text}: ${description}` : text];
+        });
+        // the VM config may have been loaded already: keep its value, and the field undirty
+        let field = me.down('field[name=device]');
+        let value = field.getValue();
+        let wasDirty = field.isDirty();
+        field.setComboItems([['__default__', Proxmox.Utils.defaultText], ...items]);
+        field.setValue(value);
+        if (!wasDirty) {
+            field.resetOriginalValue();
+        }
+    },
+
+    setVMConfig: function (vmconfig) {
+        let me = this;
 
         let ipl = PVE.Parser.parsePropertyString(vmconfig.ipl ?? '', 'device');
         me.up('window').setValues({
@@ -89,8 +100,19 @@ Ext.define('PVE.qemu.IPLEdit', {
     initComponent: function () {
         let me = this;
         me.callParent();
+        let inputPanel = me.down('#inputpanel');
+        Proxmox.Utils.API2Request({
+            url: me.url.replace(/\/config$/, '/ipl-devices'),
+            method: 'GET',
+            failure: (response) => Ext.Msg.alert(gettext('Error'), response.htmlStatus),
+            success: ({ result }) => {
+                if (!me.destroyed) {
+                    inputPanel.setIPLDevices(result.data ?? []);
+                }
+            },
+        });
         me.load({
-            success: ({ result }) => me.down('#inputpanel').setVMConfig(result.data),
+            success: ({ result }) => inputPanel.setVMConfig(result.data),
         });
     },
 });
