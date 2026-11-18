@@ -1,5 +1,5 @@
 /* This file defines the helpers, defaults and limits for various vCPU architectures, such
- * as x86_64, and aarch64.
+ * as x86_64, aarch64 and s390x.
  *
  * To add a new architecture, add the respective entry in the defaults/renderers and selection.
  */
@@ -22,21 +22,28 @@ Ext.define('PVE.qemu.Architecture', {
             bases: ['Linux', 'Other'],
             ostypes: ['l26', 'other'],
         },
+        s390x: {
+            bases: ['Linux', 'Other'],
+            ostypes: ['l26', 'other'],
+        },
     },
 
     defaultProcessorModel: {
         x86_64: 'x86-64-v2-AES',
         aarch64: 'host',
+        s390x: 'host',
     },
 
     defaultMachines: {
         x86_64: 'pc',
         aarch64: 'virt',
+        s390x: 's390-ccw-virtio',
     },
 
     defaultCDDrive: {
         x86_64: ['ide', 2],
         aarch64: ['scsi', 2],
+        s390x: ['scsi', 2],
     },
 
     allowedScsiHw: {
@@ -50,26 +57,31 @@ Ext.define('PVE.qemu.Architecture', {
             'pvscsi',
         ],
         aarch64: ['virtio-scsi-pci', 'virtio-scsi-single'],
+        s390x: ['virtio-scsi-pci', 'virtio-scsi-single'], // used as virtio-scsi-ccw
     },
 
     allowedMachines: {
         x86_64: ['__default__', 'q35'], // __default__ is i440fx
         aarch64: ['__default__'], // __default__ is virt
+        s390x: ['__default__'], // __default__ is s390-ccw-virtio
     },
 
     allowedBusses: {
         x86_64: ['ide', 'sata', 'virtio', 'scsi', 'unused'],
         aarch64: ['sata', 'virtio', 'scsi', 'unused'],
+        s390x: ['virtio', 'scsi', 'unused'],
     },
 
     allowedFirmware: {
         x86_64: ['__default__', 'seabios', 'ovmf'], // default is seabios
         aarch64: ['ovmf'],
+        s390x: ['__default__'], // the s390-ccw firmware
     },
 
     allowedTPMVersions: {
         x86_64: ['v1.2', 'v2.0'],
         aarch64: ['v2.0'],
+        s390x: [], // no TPM
     },
 
     render_vcpu_architecture: function (value) {
@@ -79,6 +91,8 @@ Ext.define('PVE.qemu.Architecture', {
                 return gettext('x86 (64-bit)');
             case 'aarch64':
                 return gettext('ARM (64-bit)');
+            case 's390x':
+                return gettext('IBM Z (64-bit)');
             default:
                 return Proxmox.Utils.unknownText;
         }

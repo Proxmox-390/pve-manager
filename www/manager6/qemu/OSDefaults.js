@@ -67,6 +67,17 @@ Ext.define('PVE.qemu.OSDefaults', {
                 scsihw: 'virtio-scsi-single',
                 bios: 'ovmf',
             },
+
+            s390x: {
+                // s390x has neither ide nor sata, nor emulated NICs
+                busType: 'scsi',
+                networkCard: 'virtio',
+                busPriority: {
+                    scsi: 4,
+                    virtio: 3,
+                },
+                scsihw: 'virtio-scsi-single',
+            },
         };
 
         // virtio-net is in kernel since 2.6.25
@@ -93,6 +104,7 @@ Ext.define('PVE.qemu.OSDefaults', {
                     },
                     networkCard: 'virtio',
                 },
+                s390x: {},
             },
         });
 

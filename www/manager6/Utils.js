@@ -567,7 +567,7 @@ Ext.define('PVE.Utils', {
 
         render_qemu_bios: function (value, arch = 'x86_64') {
             if (!value) {
-                let defaultBios = arch === 'aarch64' ? 'OVMF (UEFI)' : 'SeaBIOS';
+                let defaultBios = { aarch64: 'OVMF (UEFI)', s390x: 's390-ccw' }[arch] ?? 'SeaBIOS';
                 return `${Proxmox.Utils.defaultText} (${defaultBios})`;
             } else if (value === 'seabios') {
                 return 'SeaBIOS';
