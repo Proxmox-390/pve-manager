@@ -286,6 +286,7 @@ JSSRC= 							\
 	qemu/QemuBiosEdit.js				\
 	qemu/RNGEdit.js					\
 	qemu/S390xConsole.js				\
+	qemu/S390xInstallMedia.js			\
 	qemu/SSHKey.js					\
 	qemu/ScsiHwEdit.js				\
 	qemu/SerialEdit.js				\

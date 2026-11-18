@@ -19,6 +19,15 @@ Ext.define('PVE.qemu.OSPanel', {
         vm.set('current.isoConfig', conf);
         me.lookup('cdSelector').confid = conf;
         // TODO change confid for second cd if windows is allowed for other architectures
+
+        // s390x installers boot from tape or the network, CD/DVD only on the virtio machine
+        let isS390x = arch === 's390x';
+        let cdSelector = me.lookup('cdSelector');
+        cdSelector.setHidden(isS390x);
+        cdSelector.setDisabled(isS390x);
+        let s390xMedia = me.lookup('s390xMedia');
+        s390xMedia.setHidden(!isS390x);
+        s390xMedia.setDisabled(!isS390x);
     },
 
     controller: {
@@ -106,6 +115,12 @@ Ext.define('PVE.qemu.OSPanel', {
             },
             confid: 'ide2',
             insideWizard: true,
+        },
+        {
+            xtype: 'pveQemuS390xInstallMediaPanel',
+            reference: 's390xMedia',
+            hidden: true,
+            disabled: true,
         },
         {
             xtype: 'container',

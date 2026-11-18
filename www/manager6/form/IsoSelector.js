@@ -13,11 +13,17 @@ Ext.define('PVE.form.IsoSelector', {
     labelWidth: undefined,
     labelAlign: 'right',
 
+    // optional filter function for the images, and the label of the image field
+    fileFilter: undefined,
+    fileLabel: gettext('ISO image'),
+
     cbindData: function () {
         let me = this;
         return {
             nodename: me.nodename,
             insideWizard: me.insideWizard,
+            fileFilter: me.fileFilter,
+            fileLabel: me.fileLabel,
         };
     },
 
@@ -95,9 +101,10 @@ Ext.define('PVE.form.IsoSelector', {
             reference: 'file',
             isFormField: false,
             storageContent: 'iso',
-            fieldLabel: gettext('ISO image'),
             labelAlign: 'right',
             cbind: {
+                filter: '{fileFilter}',
+                fieldLabel: '{fileLabel}',
                 nodename: '{nodename}',
                 disabled: '{disabled}',
                 labelWidth: '{labelWidth}',

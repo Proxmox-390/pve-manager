@@ -7,6 +7,10 @@ Ext.define('PVE.qemu.CDInputPanel', {
     onGetValues: function (values) {
         var me = this;
 
+        if (me.insideWizard && me.isDisabled()) {
+            return {}; // replaced by the install media of s390x
+        }
+
         var confid = me.confid || values.controller + values.deviceid;
 
         me.drive.media = 'cdrom';
