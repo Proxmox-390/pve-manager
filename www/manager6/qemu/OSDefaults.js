@@ -77,6 +77,7 @@ Ext.define('PVE.qemu.OSDefaults', {
                     virtio: 3,
                 },
                 scsihw: 'virtio-scsi-single',
+                vga: 'serial0', // the SCLP console, s390x has no VGA
             },
         };
 
