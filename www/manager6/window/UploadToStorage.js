@@ -9,7 +9,7 @@ Ext.define('PVE.window.UploadToStorage', {
     title: gettext('Upload'),
 
     acceptedExtensions: {
-        import: ['.ova', '.qcow2', '.raw', '.vmdk'],
+        import: ['.ova', '.qcow2', '.raw', '.vmdk', '.ckd', '.ckd64', '.fba'], // s390x DASD images
         iso: ['.img', '.iso', '.aws'],
         vztmpl: ['.tar.gz', '.tar.xz', '.tar.zst'],
     },

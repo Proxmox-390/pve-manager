@@ -141,6 +141,17 @@ Ext.define('PVE.qemu.HDInputPanel', {
         me.bussel?.updateVMConfig(vmconfig);
     },
 
+    // s390x: a DASD image of Hercules (.ckd, .ckd64 or .fba) selects the matching DASD bus
+    selectBusForImage: function (volid) {
+        let me = this;
+        let kind = volid?.match(/\.(ckd|fba)(?:64)?$/i)?.[1]?.toLowerCase();
+        let arch = PVE.qemu.Architecture.getGuestArchitecture(me.vmconfig?.arch, me.nodename);
+        if (!kind || !me.bussel || arch !== 's390x') {
+            return;
+        }
+        me.bussel.down('field[name=controller]').setValue(kind);
+    },
+
     setVMConfig: function (vmconfig) {
         var me = this;
 
@@ -149,6 +160,9 @@ Ext.define('PVE.qemu.HDInputPanel', {
         if (me.bussel) {
             me.bussel.setVMConfig(vmconfig);
             me.scsiController.setValue(vmconfig.scsihw);
+            if (me.importSelection) {
+                me.selectBusForImage(me.importSelection);
+            }
         }
         if (me.unusedDisks) {
             let disklist = [];
@@ -313,6 +327,9 @@ Ext.define('PVE.qemu.HDInputPanel', {
                         name: 'import-from',
                         filter: (rec) => ['qcow2', 'vmdk', 'raw'].indexOf(rec?.data?.format) !== -1,
                         nodename: me.nodename,
+                        listeners: {
+                            change: (_field, value) => me.selectBusForImage(value),
+                        },
                     });
                 }
                 column1.push({
