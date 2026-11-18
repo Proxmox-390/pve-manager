@@ -426,6 +426,28 @@ Ext.define('PVE.qemu.Options', {
             },
         };
 
+        if (s390x) {
+            // PC hardware s390x VMs do not have: no USB pointer, ACPI, SMBIOS, SPICE or x86
+            // memory encryption (s390x has Secure Execution instead); no real-time clock, the
+            // TOD clock follows the host; KVM is required; hot-plugging is what qemu-server
+            // supports for the devices
+            let hidden = [
+                'tablet',
+                'hotplug',
+                'acpi',
+                'kvm',
+                'localtime',
+                'startdate',
+                'smbios1',
+                'spice_enhancements',
+                'amd-sev',
+                'intel-tdx',
+            ];
+            hidden.forEach((key) => {
+                rows[key].visible = false;
+            });
+        }
+
         var baseurl = 'nodes/' + nodename + '/qemu/' + vmid + '/config';
 
         var edit_btn = new Ext.Button({
