@@ -118,6 +118,28 @@ my sub has_valid_subscription {
     return $info->{status} && $info->{status} eq 'active'; # age check?
 }
 
+# s390x port: Proxmox has no Ceph packages for s390x. The port repository uses the same layout,
+# <base>/ceph-<codename> next to its main repository (suite trixie, component main), so take the
+# base URI and keyring from the port's main repository source.
+my $s390x_port_sources = '/etc/apt/sources.list.d/proxport.sources';
+
+my sub s390x_port_ceph_repo_source {
+    my ($cephver) = @_;
+
+    die "s390x: port repository source '$s390x_port_sources' not found, configure a Ceph"
+        . " repository and use '--repository manual'\n"
+        if !-f $s390x_port_sources;
+    my $raw = PVE::Tools::file_get_contents($s390x_port_sources);
+    my ($uri) = $raw =~ m/^URIs:\s*(\S+)/m;
+    my ($keyring) = $raw =~ m/^Signed-By:\s*(\S+)/m;
+    die "s390x: no URIs in '$s390x_port_sources'\n" if !$uri;
+    $uri =~ s!/+$!!;
+
+    my $source = "Types: deb\nURIs: ${uri}/ceph-${cephver}\nSuites: trixie\nComponents: main\n";
+    $source .= "Signed-By: ${keyring}\n" if $keyring;
+    return $source;
+}
+
 my $available_ceph_release_codenames = PVE::Ceph::Releases::get_available_ceph_release_codenames(1);
 my $default_ceph_version = PVE::Ceph::Releases::get_default_ceph_release_codename();
 
@@ -172,7 +194,12 @@ __PACKAGE__->register_method({
         my $cdn =
             $enterprise_repo ? 'https://enterprise.proxmox.com' : 'http://download.proxmox.com';
 
-        if ($experimental_release && $enterprise_repo) {
+        my $s390x_port = PVE::Tools::get_host_dpkg_arch() eq 's390x' && $repo ne 'manual';
+
+        if ($s390x_port) {
+            warn "\nNOTE: s390x port: using the port's Ceph repository, the '$repo' repository"
+                . " option has no effect.\n\n";
+        } elsif ($experimental_release && $enterprise_repo) {
             warn "\nWARN: Enterprise repository selected, but Ceph release is still marked as"
                 . " experimental, repository might not (yet) be useable!\n\n";
 
@@ -213,6 +240,7 @@ Suites: trixie
 Components: ${repo}
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
 EOF
+        $repo_source = s390x_port_ceph_repo_source($cephver) if $s390x_port;
 
         my $rendered_release =
             $available_ceph_releases->{$cephver}->{release} . ' ' . ucfirst($cephver);
