@@ -326,9 +326,34 @@ my sub get_current_kernel_info {
     return ($current_kernel, $kernel_version_string);
 }
 
+# The architecture mode an s390x system was IPLed in: a CZAM (z/Architecture-only) machine reports
+# facility 138 (configuration-z/Architecture-architectural-mode) in the 'facilities' line of
+# /proc/cpuinfo, an ESA/390 mode one does not. Plus the IPL type and whether it was a secure IPL.
+my sub get_s390x_boot_mode_info {
+    my $cpuinfo = eval { file_get_contents('/proc/cpuinfo') } // '';
+    my ($facilities) = $cpuinfo =~ m/^facilities\s*:\s*(.*)$/m;
+    my %facility = map { $_ => 1 } split(/\s+/, $facilities // '');
+
+    my $res = { mode => $facility{138} ? 'czam' : 'esa390' };
+
+    my $ipl_type = eval { file_get_contents('/sys/firmware/ipl/ipl_type') };
+    chomp($ipl_type) if defined($ipl_type);
+    $res->{'ipl-type'} = $ipl_type if $ipl_type && $ipl_type =~ m/^[a-z0-9_-]+$/;
+
+    my $secure = eval { file_get_contents('/sys/firmware/ipl/secure') };
+    $res->{secureboot} = $secure =~ m/^1/ ? 1 : 0 if defined($secure);
+
+    return $res;
+}
+
 my $boot_mode_info_cache;
 my sub get_boot_mode_info {
     return $boot_mode_info_cache if defined($boot_mode_info_cache);
+
+    if (PVE::Tools::get_host_arch() eq 's390x') {
+        $boot_mode_info_cache = get_s390x_boot_mode_info();
+        return $boot_mode_info_cache;
+    }
 
     my $is_efi_booted = -d "/sys/firmware/efi";
 
@@ -386,14 +411,21 @@ __PACKAGE__->register_method({
                 type => 'object',
                 properties => {
                     mode => {
-                        description => 'Through which firmware the system got booted.',
+                        description => 'Through which firmware the system got booted. On s390x,'
+                            . ' the architecture mode it was IPLed in: "czam" (z/Architecture'
+                            . ' only) or "esa390".',
                         type => 'string',
-                        enum => [qw(efi legacy-bios)],
+                        enum => [qw(efi legacy-bios czam esa390)],
                     },
                     secureboot => {
-                        description =>
-                            'System is booted in secure mode, only applicable for the "efi" mode.',
+                        description => 'System is booted in secure mode, only applicable for the'
+                            . ' "efi" mode, and on s390x for a secure IPL.',
                         type => 'boolean',
+                        optional => 1,
+                    },
+                    'ipl-type' => {
+                        description => 's390x only: the IPL type, like "ccw" or "fcp".',
+                        type => 'string',
                         optional => 1,
                     },
                 },

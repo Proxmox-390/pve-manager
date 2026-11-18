@@ -125,6 +125,13 @@ Ext.define('PVE.node.StatusView', {
                     return 'Legacy BIOS';
                 } else if (boot.mode === 'efi') {
                     return `EFI${boot.secureboot ? ' (Secure Boot)' : ''}`;
+                } else if (boot.mode === 'czam' || boot.mode === 'esa390') {
+                    // s390x: the architecture mode of the IPL
+                    let text = boot.mode === 'czam' ? 'CZAM' : 'ESA/390';
+                    if (boot['ipl-type']) {
+                        text += `, IPL: ${Ext.htmlEncode(boot['ipl-type'].toUpperCase())}`;
+                    }
+                    return `${text}${boot.secureboot ? ' (Secure IPL)' : ''}`;
                 }
                 return Proxmox.Utils.unknownText;
             },
