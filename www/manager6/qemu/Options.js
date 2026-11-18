@@ -19,6 +19,8 @@ Ext.define('PVE.qemu.Options', {
 
         var caps = Ext.state.Manager.get('GuiCap');
 
+        let s390x = PVE.qemu.Architecture.getNodeArchitecture(nodename) === 's390x';
+
         var rows = {
             name: {
                 required: true,
@@ -142,6 +144,25 @@ Ext.define('PVE.qemu.Options', {
                         } else {
                             text += sel;
                         }
+                    }
+                    return text;
+                },
+            },
+            // s390x VMs with a non-Linux OS type IPL directly from a CCW device, there is no
+            // firmware boot order for them; shown instead of 'boot' then, see below
+            ipl: {
+                header: 'IPL',
+                required: true,
+                visible: false,
+                editor: caps.vms['VM.Config.Disk'] ? 'PVE.qemu.IPLEdit' : undefined,
+                renderer: function (value) {
+                    if (!value) {
+                        return Proxmox.Utils.defaultText;
+                    }
+                    let ipl = PVE.Parser.parsePropertyString(value, 'device');
+                    let text = Ext.htmlEncode(ipl.device ?? '');
+                    if (ipl.loadparm) {
+                        text += `, ${gettext('loadparm')} ${Ext.htmlEncode(ipl.loadparm)}`;
                     }
                     return text;
                 },
@@ -458,5 +479,18 @@ Ext.define('PVE.qemu.Options', {
         me.mon(me.getStore(), 'datachanged', function () {
             set_button_status();
         });
+
+        if (s390x) {
+            // the (pending) OS type selects between the boot order and the IPL settings
+            me.mon(me.rstore, 'load', function () {
+                let ostype = me.getObjectValue('ostype', undefined, true);
+                let ipl = !PVE.qemu.Architecture.isS390xLinux(ostype);
+                if (rows.ipl.visible !== ipl) {
+                    rows.ipl.visible = ipl;
+                    rows.boot.visible = !ipl;
+                    me.getStore().filter();
+                }
+            });
+        }
     },
 });

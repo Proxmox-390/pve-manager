@@ -102,13 +102,20 @@ Ext.define('PVE.qemu.Architecture', {
     // the OS type, as xterm.js serial terminal interfaces: Linux uses the VT220 SCLP console,
     // other (mainframe) OSes the line-mode SCLP console and the integrated 3270 console.
     getS390xConsoles: function (ostype) {
-        if (ostype === 'l24' || ostype === 'l26') {
+        if (PVE.qemu.Architecture.isS390xLinux(ostype)) {
             return [{ serial: 'sclp', text: 'xterm.js' }];
         }
         return [
             { serial: 'sclplm', text: 'SCLP' },
             { serial: '3270', text: gettext('3270 Console') },
         ];
+    },
+
+    // On s390x, the OS type selects the devices: Linux guests use virtio-ccw devices and the
+    // firmware boot order, other (mainframe) OSes, also when unset, the mainframe devices and IPL
+    // settings.
+    isS390xLinux: function (ostype) {
+        return ostype === 'l24' || ostype === 'l26';
     },
 
     getNodeArchitecture: function (nodename) {

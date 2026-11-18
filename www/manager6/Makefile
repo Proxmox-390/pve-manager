@@ -270,6 +270,7 @@ JSSRC= 							\
 	qemu/HDResize.js				\
 	qemu/HardwareView.js				\
 	qemu/IPConfigEdit.js				\
+	qemu/IPLEdit.js					\
 	qemu/KeyboardEdit.js				\
 	qemu/MachineEdit.js				\
 	qemu/MemoryEdit.js				\
