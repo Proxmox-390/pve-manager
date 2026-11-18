@@ -31,6 +31,7 @@ JSSRC= 							\
 	form/CPUModelSelector.js			\
 	form/CRSOptions.js				\
 	form/CacheTypeSelector.js			\
+	form/CcwDevnoField.js			\
 	form/CalendarEvent.js				\
 	form/CephPoolSelector.js			\
 	form/CephFSSelector.js				\
