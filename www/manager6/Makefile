@@ -150,6 +150,7 @@ JSSRC= 							\
 	window/PCIMapEdit.js				\
 	window/USBMapEdit.js				\
 	window/DirMapEdit.js				\
+	window/ExportOva.js				\
 	window/GuestImport.js				\
 	ha/Fencing.js					\
 	ha/NodePrioritySelector.js			\

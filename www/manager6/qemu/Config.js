@@ -118,6 +118,19 @@ Ext.define('PVE.qemu.Config', {
                         },
                     },
                     {
+                        text: gettext('Export as OVA'),
+                        iconCls: 'fa fa-fw fa-archive',
+                        hidden: !caps.vms['VM.Backup'],
+                        handler: function () {
+                            Ext.create('PVE.window.ExportOva', {
+                                nodename: nodename,
+                                vmid: vmid,
+                                vmname: vm.name,
+                                autoShow: true,
+                            });
+                        },
+                    },
+                    {
                         iconCls: 'fa fa-heartbeat ',
                         hidden: !caps.nodes['Sys.Console'],
                         text: gettext('Manage HA'),

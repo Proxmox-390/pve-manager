@@ -2308,6 +2308,7 @@ Ext.define('PVE.Utils', {
             pull_file: ['CT', gettext('Pull file')],
             push_file: ['CT', gettext('Push file')],
             qmclone: ['VM', gettext('Clone')],
+            qmexportova: ['VM', gettext('Export as OVA')],
             qmconfig: ['VM', gettext('Configure')],
             qmcreate: ['VM', gettext('Create')],
             qmdelsnapshot: ['VM', gettext('Delete Snapshot')],
