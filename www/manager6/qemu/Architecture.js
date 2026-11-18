@@ -99,27 +99,45 @@ Ext.define('PVE.qemu.Architecture', {
     },
 
     // The consoles qemu-server attaches to an s390x VM, which has no VGA display, as xterm.js
-    // serial terminal interfaces, from the VM config: by OS type, Linux uses the VT220 SCLP
-    // console, other (mainframe) OSes the line-mode SCLP console and the integrated 3270 console.
-    // The configured 3270 terminals follow, named by their device number.
+    // serial terminal interfaces, from the VM config, the one of the operating system first. By
+    // OS type, Linux uses the VT220 SCLP console. Other (mainframe) OSes use one of the 3270
+    // terminals as system console, so these come first, named and ordered by their device
+    // number, followed by the line-mode SCLP console and the integrated (SCLP) 3270 console.
     getS390xConsoles: function (conf) {
-        let consoles;
-        if (PVE.qemu.Architecture.isS390xLinux(conf.ostype)) {
-            consoles = [{ serial: 'sclp', text: 'xterm.js' }];
-        } else {
-            consoles = [
-                { serial: 'sclplm', text: 'SCLP' },
-                { serial: '3270', text: gettext('3270 Console') },
-            ];
-        }
+        let terminals = [];
         for (let i = 0; i < PVE.Utils.hardware_counts.terminal; i++) {
             let key = `terminal${i}`;
             if (conf[key]) {
-                let terminal = PVE.Parser.parsePropertyString(conf[key], 'devno');
-                consoles.push({ serial: key, text: `3270 ${terminal.devno ?? key}` });
+                let devno = PVE.Parser.parsePropertyString(conf[key], 'devno').devno ?? '';
+                let [ssid, number] = PVE.qemu.Architecture.splitCcwDevno(devno);
+                terminals.push({
+                    serial: key,
+                    text: number !== undefined ? `3270 0.${ssid}.${number}` : `3270 ${key}`,
+                    order: number !== undefined ? parseInt(ssid + number, 16) : Infinity,
+                });
             }
         }
-        return consoles;
+        terminals.sort((a, b) => a.order - b.order);
+        terminals = terminals.map(({ serial, text }) => ({ serial, text }));
+
+        if (PVE.qemu.Architecture.isS390xLinux(conf.ostype)) {
+            return [{ serial: 'sclp', text: 'xterm.js' }, ...terminals];
+        }
+        return [
+            ...terminals,
+            { serial: 'sclplm', text: gettext('SCLP line mode') },
+            { serial: '3270', text: gettext('SCLP 3270 console') },
+        ];
+    },
+
+    // Split a CCW device number (0.<ssid>.<devno> or <devno>) into the subchannel set and the
+    // 4-digit device number, both lower-case hex; [] if it is none.
+    splitCcwDevno: function (devno) {
+        let match = /^(?:[0-9a-f]{1,2}\.([0-3])\.)?([0-9a-f]{1,4})$/i.exec(devno ?? '');
+        if (!match) {
+            return [];
+        }
+        return [match[1] ?? '0', match[2].toLowerCase().padStart(4, '0')];
     },
 
     // On s390x, the OS type selects the devices: Linux guests use virtio-ccw devices and the

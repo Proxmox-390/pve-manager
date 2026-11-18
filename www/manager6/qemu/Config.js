@@ -456,16 +456,14 @@ Ext.define('PVE.qemu.Config', {
         me.callParent();
 
         if (s390x && caps.vms['VM.Console'] && !template) {
-            // changing the OS type needs a restart of the VM anyway
+            // changing the OS type or the terminals needs a restart of the VM anyway; the console
+            // panel loads its consoles itself, it is created each time it gets selected
             Proxmox.Utils.API2Request({
                 url: base_url + '/config',
                 success: function ({ result: { data } }) {
-                    if (me.destroyed) {
-                        return;
+                    if (!me.destroyed) {
+                        consoleBtn.setSerialConsoles(PVE.qemu.Architecture.getS390xConsoles(data));
                     }
-                    let consoles = PVE.qemu.Architecture.getS390xConsoles(data);
-                    consoleBtn.setSerialConsoles(consoles);
-                    me.down('#console')?.setConsoles(consoles);
                 },
             });
         }
