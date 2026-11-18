@@ -104,5 +104,10 @@ Ext.define('PVE.button.ConsoleButton', {
         }
 
         me.callParent();
+
+        // there is no SPICE, and thus no spiceterm, on s390x
+        if (PVE.qemu.Architecture.getNodeArchitecture(me.nodename) === 's390x') {
+            me.setEnableSpice(false);
+        }
     },
 });
