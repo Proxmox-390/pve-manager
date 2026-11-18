@@ -29,6 +29,10 @@ Ext.define('PVE.form.NetworkCardSelector', {
         me.getStore().setData(items.map(([key, text]) => ({ key, value: text })));
         if (!items.find(([key]) => key === value)) {
             me.setValue(items[0][0]);
+        } else {
+            // a value set before its model was in the list was published as null, publish it
+            // again for the bindings to the model
+            me.publishState('value', value);
         }
     },
 });
