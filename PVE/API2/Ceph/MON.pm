@@ -461,6 +461,10 @@ __PACKAGE__->register_method({
                             run_command($monmaptool_cmd);
                         } else { # we need to create a monmap for the first monitor
                             push @{$monmaptool_cmd}, '--create';
+                            # new clusters only allow aes256k, keep an 'aes' client.admin usable
+                            if (PVE::Ceph::Tools::admin_keyring_needs_legacy_cipher($client_keyring)) {
+                                push @{$monmaptool_cmd}, '--auth-allowed-ciphers', 'aes256k,aes';
+                            }
                             run_command($monmaptool_cmd);
                         }
 

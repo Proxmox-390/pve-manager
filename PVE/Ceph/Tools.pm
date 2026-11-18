@@ -8,6 +8,8 @@ use File::Basename;
 use IO::File;
 use JSON;
 use List::Util qw(any);
+use MIME::Base64 qw(decode_base64);
+use POSIX ();
 
 use PVE::Tools qw(run_command dir_glob_foreach extract_param);
 use PVE::Cluster qw(cfs_read_file);
@@ -443,10 +445,42 @@ sub setup_pve_symlinks {
     chown $ceph_uid, $ceph_gid, $ceph_cfgdir;
 }
 
+# The in-kernel Ceph clients (krbd, kernel CephFS) only take aes256k keys from Linux 7.0 on, but
+# Ceph releases that know aes256k create every key with it by default. PVE storages map RBD images
+# and mount CephFS with the client.admin key, so keep that key on the older 'aes' cipher if the
+# running kernel cannot use aes256k.
+my sub admin_key_type {
+    my (undef, undef, $release) = POSIX::uname();
+    return undef if PVE::Ceph::Services::kernel_supports_aes256k($release) // 1;
+
+    my ($version) = get_local_version(1);
+    return undef if !PVE::Ceph::Services::ceph_version_supports_aes256k($version);
+
+    return 'aes';
+}
+
+# Whether the client.admin keyring holds an 'aes' key on a Ceph release whose new clusters only
+# allow aes256k for authentication, so that a new monmap has to allow 'aes' as well.
+sub admin_keyring_needs_legacy_cipher {
+    my ($keyring) = @_;
+
+    my $content = PVE::Tools::file_get_contents($keyring);
+    my ($key) = $content =~ m/^\s*key\s*=\s*(\S+)\s*$/m;
+    return 0 if !defined($key);
+
+    my $raw = decode_base64($key);
+    return 0 if length($raw) < 12 || unpack('v', $raw) != 1; # CEPH_CRYPTO_AES
+
+    my ($version) = get_local_version(1);
+    return PVE::Ceph::Services::ceph_version_supports_aes256k($version) ? 1 : 0;
+}
+
 sub get_or_create_admin_keyring {
     if (!-f $pve_ckeyring_path) {
+        my $key_type = admin_key_type();
         run_command("ceph-authtool --create-keyring $pve_ckeyring_path "
             . "--gen-key -n client.admin "
+            . (defined($key_type) ? "--key-type $key_type " : "")
             . "--cap mon 'allow *' "
             . "--cap osd 'allow *' "
             . "--cap mds 'allow *' "
