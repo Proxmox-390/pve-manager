@@ -60,6 +60,8 @@ Ext.define('PVE.qemu.HardwareView', {
         let isCloudInitKey = (v) => v && v.toString().match(/vm-.*-cloudinit/);
 
         const nodeInfo = PVE.data.ResourceStore.getNodes().find((node) => node.node === nodename);
+        // only s390x guests run on s390x nodes
+        const isS390x = PVE.qemu.Architecture.getNodeArchitecture(nodename) === 's390x';
         let processorEditor = {
             xtype: 'pveQemuProcessorEdit',
             cgroupMode: nodeInfo['cgroup-mode'],
@@ -361,6 +363,13 @@ Ext.define('PVE.qemu.HardwareView', {
                 header: gettext('Serial Port') + ' (' + confid + ')',
             };
         }
+        // s390x has no BIOS choice, display, SCSI controller choice, EFI disk or TPM
+        if (isS390x) {
+            for (const key of ['bios', 'vga', 'scsihw', 'efidisk0', 'tpmstate0']) {
+                rows[key] = { visible: false };
+            }
+        }
+
         rows.audio0 = {
             group: 40,
             iconCls: 'volume-up',
@@ -689,6 +698,7 @@ Ext.define('PVE.qemu.HardwareView', {
         let efidisk_menuitem = Ext.create('Ext.menu.Item', {
             text: gettext('EFI Disk'),
             iconCls: 'fa fa-fw fa-hdd-o black',
+            hidden: isS390x,
             disabled: !caps.vms['VM.Config.Disk'],
             handler: function () {
                 let { data: bios } = me.rstore.getData().map.bios || {};
@@ -875,6 +885,7 @@ Ext.define('PVE.qemu.HardwareView', {
                             {
                                 text: gettext('TPM State'),
                                 itemId: 'addTpmState',
+                                hidden: isS390x,
                                 iconCls: 'fa fa-fw fa-hdd-o black',
                                 disabled: !caps.vms['VM.Config.Disk'],
                                 handler: () =>

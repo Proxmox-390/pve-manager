@@ -118,6 +118,62 @@ Ext.define('PVE.qemu.Architecture', {
         return ostype === 'l24' || ostype === 'l26';
     },
 
+    // The s390x machine types of a node, from the machine type API: the versions of the virtio
+    // machine (s390-ccw-virtio, class 'virtio': firmware boot, CD-ROM drives) and the unversioned
+    // machine types of the QEMU build (class 'mainframe': channel-program IPL, no CD-ROM drives),
+    // with the one new VMs get marked 'new-vm-default'. Loaded once per node.
+    s390xMachines: {},
+
+    loadS390xMachines: function (nodename, callback) {
+        let cache = PVE.qemu.Architecture.s390xMachines;
+        nodename = nodename || 'localhost';
+        if (cache[nodename]?.loaded) {
+            callback(cache[nodename].list);
+            return;
+        }
+        if (cache[nodename]) {
+            cache[nodename].callbacks.push(callback);
+            return;
+        }
+        cache[nodename] = { callbacks: [callback] };
+        Proxmox.Utils.API2Request({
+            url: `/nodes/${nodename}/capabilities/qemu/machines`,
+            params: { arch: 's390x' },
+            method: 'GET',
+            success: function (response) {
+                let list = response.result.data ?? [];
+                let callbacks = cache[nodename].callbacks;
+                cache[nodename] = { loaded: true, list };
+                callbacks.forEach((cb) => cb(list));
+            },
+            failure: function () {
+                let callbacks = cache[nodename].callbacks;
+                delete cache[nodename];
+                callbacks.forEach((cb) => cb([]));
+            },
+        });
+    },
+
+    // The machine type a new s390x VM gets, from a loaded machine list.
+    getS390xNewVmMachine: function (list) {
+        let entry = list.find((machine) => machine['new-vm-default']);
+        return entry?.id ?? PVE.qemu.Architecture.defaultMachines.s390x;
+    },
+
+    // The class of an s390x machine config value, 'virtio' or 'mainframe', as qemu-server
+    // classifies it (see the machine type API): unset is the virtio machine.
+    getS390xMachineClass: function (machine, list) {
+        let type = PVE.Parser.parsePropertyString(machine ?? '', 'type').type;
+        if (!type || type === '__default__') {
+            return 'virtio';
+        }
+        let entry = (list ?? []).find((m) => m.id === type);
+        if (entry?.class) {
+            return entry.class;
+        }
+        return type.match(/^s390-ccw-virtio(?:$|-)/) ? 'virtio' : 'mainframe';
+    },
+
     getNodeArchitecture: function (nodename) {
         let hostArch = PVE.data.ResourceStore.getNodeById(nodename)?.data['host-arch'];
         return PVE.qemu.Architecture.normalizeArchitecture(hostArch) ?? 'x86_64';
