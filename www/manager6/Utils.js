@@ -1866,6 +1866,7 @@ Ext.define('PVE.Utils', {
             serial: 4,
             rng: 1,
             tpmstate: 1,
+            tape: 4, // s390x tape drives
             virtiofs: 10,
         },
 

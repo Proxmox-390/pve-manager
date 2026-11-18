@@ -62,6 +62,12 @@ Ext.define('PVE.qemu.HardwareView', {
         const nodeInfo = PVE.data.ResourceStore.getNodes().find((node) => node.node === nodename);
         // only s390x guests run on s390x nodes
         const isS390x = PVE.qemu.Architecture.getNodeArchitecture(nodename) === 's390x';
+        let s390xMachines = [];
+        if (isS390x) {
+            PVE.qemu.Architecture.loadS390xMachines(nodename, (list) => {
+                s390xMachines = list;
+            });
+        }
         let processorEditor = {
             xtype: 'pveQemuProcessorEdit',
             cgroupMode: nodeInfo['cgroup-mode'],
@@ -363,6 +369,31 @@ Ext.define('PVE.qemu.HardwareView', {
                 header: gettext('Serial Port') + ' (' + confid + ')',
             };
         }
+        // install media of s390x VMs
+        for (let i = 0; i < PVE.qemu.S390xMedia.maxTapes; i++) {
+            let confid = `tape${i}`;
+            rows[confid] = {
+                group: 12,
+                order: i,
+                iconCls: 'film',
+                editor: cdromCap ? 'PVE.qemu.TapeEdit' : undefined,
+                never_delete: !cdromCap,
+                header: gettext('Tape Drive') + ` (${confid})`,
+                renderer: PVE.qemu.S390xMedia.renderTape,
+            };
+        }
+        rows.netboot = {
+            group: 13,
+            iconCls: 'cloud-download',
+            editor: cdromCap ? 'PVE.qemu.NetbootEdit' : undefined,
+            never_delete: !cdromCap,
+            header: gettext('Network Boot'),
+            renderer: PVE.qemu.S390xMedia.renderNetboot,
+        };
+        rows['netboot-cmdline'] = {
+            visible: false,
+        };
+
         // s390x has no BIOS choice, display, SCSI controller choice, EFI disk or TPM
         if (isS390x) {
             for (const key of ['bios', 'vga', 'scsihw', 'efidisk0', 'tpmstate0']) {
@@ -762,6 +793,17 @@ Ext.define('PVE.qemu.HardwareView', {
             me.down('#addCloudinitDrive').setDisabled(
                 noVMConfigCDROMPerm || noVMConfigCloudinitPerm || hasCloudInit,
             );
+            if (isS390x) {
+                // CD/DVD drives only exist on the virtio machine
+                let machine = me.getObjectValue('machine', undefined, true);
+                let cdAllowed =
+                    PVE.qemu.Architecture.getS390xMachineClass(machine, s390xMachines) === 'virtio';
+                me.down('#addCdrom').setHidden(!cdAllowed);
+                me.down('#addTape').setDisabled(noVMConfigCDROMPerm || isAtLimit('tape'));
+                me.down('#addNetboot').setDisabled(
+                    noVMConfigCDROMPerm || !!me.getObjectValue('netboot', undefined, true),
+                );
+            }
 
             if (!rec) {
                 remove_btn.disable();
@@ -870,9 +912,26 @@ Ext.define('PVE.qemu.HardwareView', {
                             },
                             {
                                 text: gettext('CD/DVD Drive'),
+                                itemId: 'addCdrom',
                                 iconCls: 'pve-itype-icon-cdrom',
                                 disabled: !caps.vms['VM.Config.CDROM'],
                                 handler: editorFactory('CDEdit'),
+                            },
+                            {
+                                text: gettext('Tape Drive'),
+                                itemId: 'addTape',
+                                iconCls: 'fa fa-fw fa-film black',
+                                hidden: !isS390x,
+                                disabled: !caps.vms['VM.Config.CDROM'],
+                                handler: editorFactory('TapeEdit'),
+                            },
+                            {
+                                text: gettext('Network Boot'),
+                                itemId: 'addNetboot',
+                                iconCls: 'fa fa-fw fa-cloud-download black',
+                                hidden: !isS390x,
+                                disabled: !caps.vms['VM.Config.CDROM'],
+                                handler: editorFactory('NetbootEdit'),
                             },
                             {
                                 text: gettext('Network Device'),
