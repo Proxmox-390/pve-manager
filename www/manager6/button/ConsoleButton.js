@@ -13,6 +13,9 @@ Ext.define('PVE.button.ConsoleButton', {
     enableSpice: true,
     enableXtermjs: true,
 
+    // VM serial terminals offered instead of the viewers, see setSerialConsoles
+    serialConsoles: undefined,
+
     nodename: undefined,
 
     vmid: 0,
@@ -33,9 +36,34 @@ Ext.define('PVE.button.ConsoleButton', {
         me.down('#xtermjs').setDisabled(!enable);
     },
 
+    // Offer the given serial terminals of a VM, each opened with xterm.js, instead of the
+    // viewers; the first one is the default. Used for s390x VMs, which have SCLP and 3270
+    // consoles instead of a VGA display.
+    // consoles: [{ serial: <serial terminal interface>, text: <menu entry> }]
+    setSerialConsoles: function (consoles) {
+        let me = this;
+
+        me.serialConsoles = consoles;
+        let menu = me.getMenu();
+        menu.query('menuitem[serial]').forEach((item) => menu.remove(item));
+        ['#novnc', '#spicemenu', '#xtermjs'].forEach((id) => me.down(id).setHidden(true));
+        menu.add(
+            consoles.map(({ serial, text }) => ({
+                text,
+                serial,
+                iconCls: 'pve-itype-icon-xtermjs',
+                handler: () => me.openConsole('xtermjs', serial),
+            })),
+        );
+    },
+
     handler: function () {
         // main, general, handler
         let me = this;
+        if (me.serialConsoles) {
+            me.openConsole('xtermjs', me.serialConsoles[0].serial);
+            return;
+        }
         PVE.Utils.openDefaultConsoleWindow(
             {
                 spice: me.enableSpice,
@@ -66,6 +94,7 @@ Ext.define('PVE.button.ConsoleButton', {
     menu: [
         {
             xtype: 'menuitem',
+            itemId: 'novnc',
             text: 'noVNC',
             iconCls: 'pve-itype-icon-novnc',
             type: 'html5',

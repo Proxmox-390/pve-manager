@@ -98,6 +98,19 @@ Ext.define('PVE.qemu.Architecture', {
         }
     },
 
+    // The consoles qemu-server attaches to an s390x VM, which has no VGA display, depending on
+    // the OS type, as xterm.js serial terminal interfaces: Linux uses the VT220 SCLP console,
+    // other (mainframe) OSes the line-mode SCLP console and the integrated 3270 console.
+    getS390xConsoles: function (ostype) {
+        if (ostype === 'l24' || ostype === 'l26') {
+            return [{ serial: 'sclp', text: 'xterm.js' }];
+        }
+        return [
+            { serial: 'sclplm', text: 'SCLP' },
+            { serial: '3270', text: gettext('3270 Console') },
+        ];
+    },
+
     getNodeArchitecture: function (nodename) {
         let hostArch = PVE.data.ResourceStore.getNodeById(nodename)?.data['host-arch'];
         return PVE.qemu.Architecture.normalizeArchitecture(hostArch) ?? 'x86_64';
