@@ -73,6 +73,7 @@ Ext.define('PVE.qemu.SystemInputPanel', {
                 me.lookup('addtpmbox').setValue(true);
             }
 
+            me.lookup('vga').setValue(defaults.vga ?? '__default__');
             me.lookup('machine').setValue(defaults.machine ?? '__default__');
             me.lookup('bios').setValue(defaults.bios ?? '__default__');
         },
@@ -85,6 +86,7 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             deleteEmpty: false,
             fieldLabel: gettext('Graphic card'),
             name: 'vga',
+            reference: 'vga',
             comboItems: Object.entries(PVE.Utils.kvm_vga_drivers),
         },
         {
