@@ -33,6 +33,19 @@ Ext.define('PVE.qemu.SystemInputPanel', {
         delete values.preEnrolledKeys; // efidisk
         delete values.version; // tpmstate
 
+        // s390x: 3270 terminals at consecutive device numbers
+        let count = values.terminals ?? 0;
+        let match = /^(?:0\.([0-3])\.)?([0-9a-f]{1,4})$/i.exec(values.terminaldevno ?? '');
+        if (match) {
+            let [, ssid = '0', first] = match;
+            for (let i = 0; i < count; i++) {
+                let devno = (parseInt(first, 16) + i).toString(16).padStart(4, '0');
+                values[`terminal${i}`] = `0.${ssid}.${devno}`;
+            }
+        }
+        delete values.terminals;
+        delete values.terminaldevno;
+
         return values;
     },
 
@@ -87,6 +100,9 @@ Ext.define('PVE.qemu.SystemInputPanel', {
                 me.lookup('addtpmbox').setValue(true);
             }
 
+            // mainframe operating systems need a 3270 terminal, Linux has its SCLP console
+            let terminals = architecture === 's390x' && !PVE.qemu.Architecture.isS390xLinux(ostype);
+            me.lookup('terminals').setValue(terminals ? 1 : 0);
             if (architecture === 's390x') {
                 return; // the machine selector selects the default for new VMs itself
             }
@@ -108,6 +124,35 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             bind: {
                 hidden: '{isS390x}',
                 disabled: '{isS390x}',
+            },
+        },
+        {
+            xtype: 'proxmoxintegerfield',
+            name: 'terminals',
+            reference: 'terminals',
+            fieldLabel: gettext('3270 Terminals'),
+            minValue: 0,
+            maxValue: PVE.Utils.hardware_counts.terminal,
+            value: 0,
+            hidden: true,
+            disabled: true,
+            bind: {
+                hidden: '{!isS390x}',
+                disabled: '{!isS390x}',
+            },
+        },
+        {
+            xtype: 'pveCcwDevnoField',
+            name: 'terminaldevno',
+            fieldLabel: gettext('First Address'),
+            kind: '3270',
+            autoSuggest: false, // a new VM, the 3270 range starts there
+            value: '0.0.0700',
+            hidden: true,
+            disabled: true,
+            bind: {
+                hidden: '{!isS390x}',
+                disabled: '{!isS390x}',
             },
         },
         {

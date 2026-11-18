@@ -1543,7 +1543,7 @@ Ext.define('PVE.Utils', {
                 url: `/nodes/${nodename}/qemu/${vmid}/config`,
                 failure: (response) => Ext.Msg.alert('Error', response.htmlStatus),
                 success: function ({ result: { data } }) {
-                    let serial = PVE.qemu.Architecture.getS390xConsoles(data.ostype)[0].serial;
+                    let serial = PVE.qemu.Architecture.getS390xConsoles(data)[0].serial;
                     PVE.Utils.openConsoleWindow(
                         'xtermjs',
                         'kvm',
@@ -1870,6 +1870,7 @@ Ext.define('PVE.Utils', {
             tpmstate: 1,
             tape: 4, // s390x tape drives
             virtiofs: 10,
+            terminal: 16, // 3270 terminals of s390x VMs
         },
 
         // we can have usb6 and up only for specific machine/ostypes

@@ -98,17 +98,28 @@ Ext.define('PVE.qemu.Architecture', {
         }
     },
 
-    // The consoles qemu-server attaches to an s390x VM, which has no VGA display, depending on
-    // the OS type, as xterm.js serial terminal interfaces: Linux uses the VT220 SCLP console,
-    // other (mainframe) OSes the line-mode SCLP console and the integrated 3270 console.
-    getS390xConsoles: function (ostype) {
-        if (PVE.qemu.Architecture.isS390xLinux(ostype)) {
-            return [{ serial: 'sclp', text: 'xterm.js' }];
+    // The consoles qemu-server attaches to an s390x VM, which has no VGA display, as xterm.js
+    // serial terminal interfaces, from the VM config: by OS type, Linux uses the VT220 SCLP
+    // console, other (mainframe) OSes the line-mode SCLP console and the integrated 3270 console.
+    // The configured 3270 terminals follow, named by their device number.
+    getS390xConsoles: function (conf) {
+        let consoles;
+        if (PVE.qemu.Architecture.isS390xLinux(conf.ostype)) {
+            consoles = [{ serial: 'sclp', text: 'xterm.js' }];
+        } else {
+            consoles = [
+                { serial: 'sclplm', text: 'SCLP' },
+                { serial: '3270', text: gettext('3270 Console') },
+            ];
         }
-        return [
-            { serial: 'sclplm', text: 'SCLP' },
-            { serial: '3270', text: gettext('3270 Console') },
-        ];
+        for (let i = 0; i < PVE.Utils.hardware_counts.terminal; i++) {
+            let key = `terminal${i}`;
+            if (conf[key]) {
+                let terminal = PVE.Parser.parsePropertyString(conf[key], 'devno');
+                consoles.push({ serial: key, text: `3270 ${terminal.devno ?? key}` });
+            }
+        }
+        return consoles;
     },
 
     // On s390x, the OS type selects the devices: Linux guests use virtio-ccw devices and the
