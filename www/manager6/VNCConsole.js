@@ -8,6 +8,7 @@ Ext.define('PVE.noVncConsole', {
 
     consoleType: undefined, // lxc, kvm, shell, cmd
     xtermjs: false,
+    serial: undefined, // VM serial terminal interface for xterm.js, e.g. serial0; default if unset
 
     layout: 'fit',
     border: false,
@@ -62,6 +63,7 @@ Ext.define('PVE.noVncConsole', {
                         node: me.nodename,
                         cmd: me.cmd,
                         'cmd-opts': me.cmdOpts,
+                        serial: me.serial,
                         resize: sp.get('novnc-scaling', 'scale'),
                     };
                     queryDict[type] = 1;

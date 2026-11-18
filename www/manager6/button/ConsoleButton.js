@@ -49,7 +49,7 @@ Ext.define('PVE.button.ConsoleButton', {
         );
     },
 
-    openConsole: function (types) {
+    openConsole: function (types, serial) {
         // used by split-menu buttons
         let me = this;
         PVE.Utils.openConsoleWindow(
@@ -59,6 +59,7 @@ Ext.define('PVE.button.ConsoleButton', {
             me.nodename,
             me.consoleName,
             me.cmd,
+            serial,
         );
     },
 
