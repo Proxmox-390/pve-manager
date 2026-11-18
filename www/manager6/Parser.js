@@ -117,7 +117,7 @@ Ext.define('PVE.Parser', {
 
                 if (
                     (match_res = p.match(
-                        /^(ne2k_pci|e1000e?|e1000-82540em|e1000-82544gc|e1000-82545em|vmxnet3|rtl8139|pcnet|virtio|ne2k_isa|i82551|i82557b|i82559er)(=([0-9a-f]{2}(:[0-9a-f]{2}){5}))?$/i,
+                        /^(ne2k_pci|e1000e?|e1000-82540em|e1000-82544gc|e1000-82545em|vmxnet3|rtl8139|pcnet|virtio|ne2k_isa|i82551|i82557b|i82559er|qeth)(=([0-9a-f]{2}(:[0-9a-f]{2}){5}))?$/i,
                     )) !== null
                 ) {
                     res.model = match_res[1].toLowerCase();
@@ -142,6 +142,8 @@ Ext.define('PVE.Parser', {
                     res.trunks = match_res[1];
                 } else if ((match_res = p.match(/^mtu=(\d+)$/)) !== null) {
                     res.mtu = match_res[1];
+                } else if ((match_res = p.match(/^devno=([0-9a-f.]+)$/i)) !== null) {
+                    res.devno = match_res[1];
                 } else {
                     errors = true;
                     return false; // break
@@ -184,6 +186,9 @@ Ext.define('PVE.Parser', {
             }
             if (net.mtu) {
                 netstr += ',mtu=' + net.mtu;
+            }
+            if (net.devno) {
+                netstr += ',devno=' + net.devno;
             }
             return netstr;
         },

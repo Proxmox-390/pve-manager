@@ -259,9 +259,19 @@ Ext.define('PVE.qemu.CreateWizard', {
             xtype: 'pveQemuNetworkInputPanel',
             bind: {
                 nodename: '{nodename}',
+                arch: '{current.architecture}',
+                ostype: '{current.ostype}',
             },
             title: gettext('Network'),
             insideWizard: true,
+            listeners: {
+                // the device number of a qeth adapter (s390x) is suggested for the new VM
+                activate: function (panel) {
+                    let wizard = panel.up('window');
+                    let vmid = wizard.down('pveGuestIDSelector').getValue();
+                    panel.setVMConfig(wizard.lookup('nodenameSelector').getValue(), vmid);
+                },
+            },
         },
         {
             title: gettext('Confirm'),

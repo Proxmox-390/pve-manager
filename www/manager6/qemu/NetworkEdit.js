@@ -20,6 +20,12 @@ Ext.define('PVE.qemu.NetworkInputPanel', {
         me.network.disconnect = values.disconnect;
         me.network.queues = values.queues;
         me.network.mtu = values.mtu;
+        // the device number of a qeth adapter on s390x
+        if (values.model === 'qeth' && values.devno) {
+            me.network.devno = values.devno;
+        } else {
+            delete me.network.devno;
+        }
 
         if (values.rate) {
             me.network.rate = values.rate;
@@ -41,6 +47,7 @@ Ext.define('PVE.qemu.NetworkInputPanel', {
         },
         formulas: {
             isVirtio: (get) => get('networkModel') === 'virtio',
+            isQeth: (get) => get('networkModel') === 'qeth',
             showMtuHint: (get) => get('mtu') === 1,
         },
     },
@@ -65,6 +72,26 @@ Ext.define('PVE.qemu.NetworkInputPanel', {
         var me = this;
 
         me.bridgesel.setNodename(nodename);
+    },
+
+    // The NIC models depend on the architecture, and on s390x on the OS type too.
+    setArch: function (arch) {
+        let me = this;
+        me.arch = arch;
+        me.down('pveNetworkCardSelector').setArchitecture(me.arch, me.ostype, me.configuredModel);
+    },
+
+    setOstype: function (ostype) {
+        let me = this;
+        me.ostype = ostype;
+        me.down('pveNetworkCardSelector').setArchitecture(me.arch, me.ostype, me.configuredModel);
+    },
+
+    // The VM whose CCW device numbers the device number field of qeth adapters checks for the
+    // next free one, which does not need to exist yet.
+    setVMConfig: function (nodename, vmid) {
+        let me = this;
+        me.down('pveCcwDevnoField[name=devno]').setVMConfig(nodename, vmid);
     },
 
     initComponent: function () {
@@ -111,6 +138,7 @@ Ext.define('PVE.qemu.NetworkInputPanel', {
                 fieldLabel: 'MTU',
                 bind: {
                     disabled: '{!isVirtio}',
+                    hidden: '{isQeth}',
                     value: '{mtu}',
                 },
                 emptyText: gettext('Same as bridge'),
@@ -144,6 +172,7 @@ Ext.define('PVE.qemu.NetworkInputPanel', {
                             'rate',
                             'queues',
                             'mtu',
+                            'devno',
                         ];
                         fields.forEach(function (fieldname) {
                             me.down('field[name=' + fieldname + ']').setDisabled(value);
@@ -165,6 +194,19 @@ Ext.define('PVE.qemu.NetworkInputPanel', {
                 bind: '{networkModel}',
                 value: PVE.qemu.OSDefaults.getDefaults().networkCard,
                 allowBlank: false,
+            },
+            {
+                // a qeth adapter uses three consecutive device numbers starting with this one
+                xtype: 'pveCcwDevnoField',
+                name: 'devno',
+                kind: 'qeth',
+                nodename: me.nodename,
+                hidden: true,
+                disabled: true,
+                bind: {
+                    hidden: '{!isQeth}',
+                    disabled: '{!isQeth}',
+                },
             },
             {
                 xtype: 'textfield',
@@ -190,6 +232,11 @@ Ext.define('PVE.qemu.NetworkInputPanel', {
                 xtype: 'proxmoxintegerfield',
                 name: 'queues',
                 fieldLabel: 'Multiqueue',
+                bind: {
+                    // qeth adapters have no multiqueue
+                    disabled: '{isQeth}',
+                    hidden: '{isQeth}',
+                },
                 minValue: 1,
                 maxValue: 64,
                 value: '',
@@ -233,6 +280,7 @@ Ext.define('PVE.qemu.NetworkEdit', {
             nodename: nodename,
             isCreate: me.isCreate,
         });
+        let vmid = me.pveSelNode.data.vmid;
 
         Ext.applyIf(me, {
             subject: gettext('Network Device'),
@@ -245,6 +293,8 @@ Ext.define('PVE.qemu.NetworkEdit', {
             success: function (response, options) {
                 var i, confid;
                 me.vmconfig = response.result.data;
+                let arch = PVE.qemu.Architecture.getGuestArchitecture(me.vmconfig.arch, nodename);
+                ipanel.ostype = me.vmconfig.ostype;
                 if (!me.isCreate) {
                     let value = me.vmconfig[me.confid];
                     let network = PVE.Parser.parseQemuNetwork(me.confid, value);
@@ -253,7 +303,10 @@ Ext.define('PVE.qemu.NetworkEdit', {
                         me.close();
                         return;
                     }
+                    ipanel.configuredModel = network.model;
                     ipanel.setNetwork(me.confid, network);
+                    ipanel.setArch(arch);
+                    ipanel.setVMConfig(nodename, vmid);
                 } else {
                     for (i = 0; i < 100; i++) {
                         confid = 'net' + i.toString();
@@ -264,16 +317,14 @@ Ext.define('PVE.qemu.NetworkEdit', {
                     }
 
                     let ostype = me.vmconfig.ostype;
-                    let arch = PVE.qemu.Architecture.getGuestArchitecture(
-                        me.vmconfig.arch,
-                        me.nodename,
-                    );
                     let defaults = PVE.qemu.OSDefaults.getDefaults(ostype, arch);
                     let data = {
                         model: defaults.networkCard,
                     };
 
+                    ipanel.setArch(arch);
                     ipanel.setNetwork(me.confid, data);
+                    ipanel.setVMConfig(nodename, vmid);
                 }
             },
         });
