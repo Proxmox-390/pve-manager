@@ -69,12 +69,15 @@ Ext.define('PVE.qemu.OSDefaults', {
             },
 
             s390x: {
-                // s390x has neither ide nor sata, nor emulated NICs
-                busType: 'scsi',
+                // s390x has neither ide nor sata, nor emulated NICs. Mainframe operating
+                // systems run from DASDs, usually CKD volumes.
+                busType: 'ckd',
                 networkCard: 'virtio',
                 busPriority: {
-                    scsi: 4,
-                    virtio: 3,
+                    ckd: 5,
+                    fba: 4,
+                    scsi: 2,
+                    virtio: 1,
                 },
                 scsihw: 'virtio-scsi-single',
                 vga: 'serial0', // the SCLP console, s390x has no VGA
@@ -105,7 +108,15 @@ Ext.define('PVE.qemu.OSDefaults', {
                     },
                     networkCard: 'virtio',
                 },
-                s390x: {},
+                s390x: {
+                    busType: 'scsi',
+                    busPriority: {
+                        scsi: 4,
+                        virtio: 3,
+                        fba: 2,
+                        ckd: 1,
+                    },
+                },
             },
         });
 

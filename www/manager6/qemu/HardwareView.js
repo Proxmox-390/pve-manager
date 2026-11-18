@@ -291,6 +291,11 @@ Ext.define('PVE.qemu.HardwareView', {
             },
         };
 
+        // the DASDs of s390x VMs
+        let dasdHeaders = {
+            fba: gettext('FBA DASD'),
+            ckd: gettext('CKD DASD'),
+        };
         PVE.Utils.forEachBus(undefined, function (type, id) {
             let confid = type + id;
             rows[confid] = {
@@ -298,10 +303,12 @@ Ext.define('PVE.qemu.HardwareView', {
                 iconCls: 'hdd-o',
                 editor: 'PVE.qemu.HDEdit',
                 isOnStorageBus: true,
-                header: gettext('Hard Disk') + ' (' + confid + ')',
+                header: (dasdHeaders[type] ?? gettext('Hard Disk')) + ' (' + confid + ')',
                 cdheader: gettext('CD/DVD Drive') + ' (' + confid + ')',
                 cloudheader: gettext('CloudInit Drive') + ' (' + confid + ')',
-                renderer: Ext.htmlEncode,
+                renderer: dasdHeaders[type]
+                    ? (value) => PVE.qemu.DASDFields.renderDASD(confid, value)
+                    : Ext.htmlEncode,
             };
         });
         for (let i = 0; i < PVE.Utils.hardware_counts.net; i++) {
