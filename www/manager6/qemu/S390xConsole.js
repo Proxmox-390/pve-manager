@@ -10,6 +10,12 @@ Ext.define('PVE.qemu.S390xConsole', {
     layout: 'fit',
     border: false,
 
+    listeners: {
+        activate: function () {
+            this.loadActiveConsole();
+        },
+    },
+
     // consoles: [{ serial: <serial terminal interface>, text: <tab title> }], see
     // PVE.qemu.Architecture.getS390xConsoles
     setConsoles: function (consoles) {
@@ -31,12 +37,42 @@ Ext.define('PVE.qemu.S390xConsole', {
                 nodename: me.nodename,
             })),
         });
+
+        // the consoles arrive after the config is loaded, the panel may already be shown
+        if (me.isVisible(true)) {
+            me.loadActiveConsole();
+        }
     },
 
+    // A console loads (and reconnects) when it gets the 'activate' event. The tab panel only
+    // fires it when switching tabs, not for the initially active tab, and not when this panel
+    // gets shown, so pass this panel's activation on to the active console.
+    loadActiveConsole: function () {
+        let me = this;
+
+        let activeConsole = me.down('tabpanel')?.getActiveTab();
+        if (!activeConsole) {
+            return;
+        }
+        if (!activeConsole.rendered) {
+            if (!activeConsole.loadOnRender) {
+                activeConsole.loadOnRender = true;
+                activeConsole.on('afterrender', () => me.loadActiveConsole(), me, { single: true });
+            }
+            return;
+        }
+        activeConsole.fireEvent('activate', activeConsole);
+    },
+
+    // reconnect the active console, used when the VM was (re)started
     reload: function () {
-        let activeConsole = this.down('tabpanel')?.getActiveTab();
-        if (activeConsole?.rendered) {
+        let me = this;
+
+        let activeConsole = me.down('tabpanel')?.getActiveTab();
+        if (activeConsole?.down('[itemid=vncconsole]')?.src) {
             activeConsole.reload();
+        } else if (me.isVisible(true)) {
+            me.loadActiveConsole(); // not loaded yet
         }
     },
 });
