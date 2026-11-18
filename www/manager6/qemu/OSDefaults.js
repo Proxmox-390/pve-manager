@@ -69,10 +69,10 @@ Ext.define('PVE.qemu.OSDefaults', {
             },
 
             s390x: {
-                // s390x has neither ide nor sata, nor emulated NICs. Mainframe operating
-                // systems run from DASDs, usually CKD volumes.
+                // s390x has neither ide nor sata. Mainframe operating systems run from DASDs,
+                // usually CKD volumes, and use qeth network adapters; VirtIO is for Linux guests.
                 busType: 'ckd',
-                networkCard: 'virtio',
+                networkCard: 'qeth',
                 busPriority: {
                     ckd: 5,
                     fba: 4,
