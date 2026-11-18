@@ -723,6 +723,8 @@ Ext.define('PVE.qemu.HardwareView', {
             },
         });
 
+        let isS390x = PVE.qemu.Architecture.getNodeArchitecture(nodename) === 's390x';
+
         let counts = {};
         let isAtLimit = (type) => counts[type] >= PVE.Utils.hardware_counts[type];
         let isAtUsbLimit = () => {
@@ -771,6 +773,15 @@ Ext.define('PVE.qemu.HardwareView', {
             me.down('#addCloudinitDrive').setDisabled(
                 noVMConfigCDROMPerm || noVMConfigCloudinitPerm || hasCloudInit,
             );
+
+            // s390x: only the VirtIO disks and network devices can be hot-plugged, the
+            // mainframe devices (DASD, tape, qeth, 3270 terminals) change at the next start
+            if (isS390x) {
+                let anyPending = me.rstore
+                    .getData()
+                    .items.some(({ id }) => rows[id] && me.hasPendingChanges(id));
+                me.down('#s390xPendingHint').setHidden(!(anyPending && me.pveSelNode.data.running));
+            }
 
             if (!rec) {
                 remove_btn.disable();
@@ -932,8 +943,7 @@ Ext.define('PVE.qemu.HardwareView', {
                                 itemId: 'addTerminal',
                                 iconCls: 'fa fa-fw fa-terminal black',
                                 // 3270 terminals are CCW devices of s390x VMs
-                                hidden:
-                                    PVE.qemu.Architecture.getNodeArchitecture(nodename) !== 's390x',
+                                hidden: !isS390x,
                                 disabled: !caps.vms['VM.Config.HWType'],
                                 handler: editorFactory('TerminalEdit'),
                             },
@@ -975,6 +985,17 @@ Ext.define('PVE.qemu.HardwareView', {
                 edit_btn,
                 diskaction_btn,
                 revert_btn,
+                '->',
+                {
+                    xtype: 'tbtext',
+                    itemId: 's390xPendingHint',
+                    hidden: true,
+                    html:
+                        '<i class="fa fa-info-circle"></i> ' +
+                        gettext(
+                            'Pending changes apply at the next VM start. Only VirtIO disks and network devices can be hot-plugged on IBM Z.',
+                        ),
+                },
             ],
             rows: rows,
             sorterFn: sorterFn,
