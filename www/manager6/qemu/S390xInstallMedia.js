@@ -442,7 +442,11 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
 
         onMediaChange: function (field, value) {
             if (value) {
-                this.getViewModel().set('mediaType', field.inputValue);
+                let vm = this.getViewModel();
+                vm.set('mediaType', field.inputValue);
+                // apply the bindings now: the wizard checks the validity of the tab on this
+                // change, the fields of the other media must be disabled by then
+                vm.notify();
             }
         },
 
