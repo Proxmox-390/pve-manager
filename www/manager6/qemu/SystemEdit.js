@@ -14,6 +14,8 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             efidisk: function (get) {
                 return get('efi') && get('addefi');
             },
+            // s390x VMs get 3270 terminals instead of a display
+            isS390x: (get) => get('current.architecture') === 's390x',
         },
     },
 
@@ -28,6 +30,19 @@ Ext.define('PVE.qemu.SystemInputPanel', {
 
         delete values.preEnrolledKeys; // efidisk
         delete values.version; // tpmstate
+
+        // s390x: 3270 terminals at consecutive device numbers
+        let count = values.terminals ?? 0;
+        let match = /^(?:0\.([0-3])\.)?([0-9a-f]{1,4})$/i.exec(values.terminaldevno ?? '');
+        if (match) {
+            let [, ssid = '0', first] = match;
+            for (let i = 0; i < count; i++) {
+                let devno = (parseInt(first, 16) + i).toString(16).padStart(4, '0');
+                values[`terminal${i}`] = `0.${ssid}.${devno}`;
+            }
+        }
+        delete values.terminals;
+        delete values.terminaldevno;
 
         return values;
     },
@@ -74,6 +89,9 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             }
 
             me.lookup('vga').setValue(defaults.vga ?? '__default__');
+            // mainframe operating systems need a 3270 terminal, Linux has its SCLP console
+            let terminals = architecture === 's390x' && !PVE.qemu.Architecture.isS390xLinux(ostype);
+            me.lookup('terminals').setValue(terminals ? 1 : 0);
             me.lookup('machine').setValue(defaults.machine ?? '__default__');
             me.lookup('bios').setValue(defaults.bios ?? '__default__');
         },
@@ -88,6 +106,35 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             name: 'vga',
             reference: 'vga',
             comboItems: Object.entries(PVE.Utils.kvm_vga_drivers),
+        },
+        {
+            xtype: 'proxmoxintegerfield',
+            name: 'terminals',
+            reference: 'terminals',
+            fieldLabel: gettext('3270 Terminals'),
+            minValue: 0,
+            maxValue: PVE.Utils.hardware_counts.terminal,
+            value: 0,
+            hidden: true,
+            disabled: true,
+            bind: {
+                hidden: '{!isS390x}',
+                disabled: '{!isS390x}',
+            },
+        },
+        {
+            xtype: 'pveCcwDevnoField',
+            name: 'terminaldevno',
+            fieldLabel: gettext('First Address'),
+            kind: '3270',
+            autoSuggest: false, // a new VM, the 3270 range starts there
+            value: '0.0.0700',
+            hidden: true,
+            disabled: true,
+            bind: {
+                hidden: '{!isS390x}',
+                disabled: '{!isS390x}',
+            },
         },
         {
             xtype: 'pveQemuMachineSelector',

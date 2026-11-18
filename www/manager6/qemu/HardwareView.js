@@ -368,6 +368,17 @@ Ext.define('PVE.qemu.HardwareView', {
                 header: gettext('Serial Port') + ' (' + confid + ')',
             };
         }
+        for (let i = 0; i < PVE.Utils.hardware_counts.terminal; i++) {
+            let confid = 'terminal' + i.toString();
+            rows[confid] = {
+                group: 37,
+                order: i,
+                iconCls: 'terminal',
+                editor: caps.vms['VM.Config.HWType'] ? 'PVE.qemu.TerminalEdit' : undefined,
+                never_delete: !caps.vms['VM.Config.HWType'],
+                header: gettext('3270 Terminal') + ' (' + confid + ')',
+            };
+        }
         rows.audio0 = {
             group: 40,
             iconCls: 'volume-up',
@@ -751,6 +762,7 @@ Ext.define('PVE.qemu.HardwareView', {
             me.down('#addPci').setDisabled(noVMConfigHWTypePerm || isAtLimit('hostpci'));
             me.down('#addAudio').setDisabled(noVMConfigHWTypePerm || isAtLimit('audio'));
             me.down('#addSerial').setDisabled(noVMConfigHWTypePerm || isAtLimit('serial'));
+            me.down('#addTerminal').setDisabled(noVMConfigHWTypePerm || isAtLimit('terminal'));
             me.down('#addNet').setDisabled(noVMConfigNetPerm || isAtLimit('net'));
             me.down('#addRng').setDisabled(noVMConfigHWTypePerm || isAtLimit('rng'));
             efidisk_menuitem.setDisabled(noVMConfigDiskPerm || isAtLimit('efidisk'));
@@ -914,6 +926,16 @@ Ext.define('PVE.qemu.HardwareView', {
                                 iconCls: 'pve-itype-icon-serial',
                                 disabled: !caps.vms['VM.Config.Options'],
                                 handler: editorFactory('SerialEdit'),
+                            },
+                            {
+                                text: gettext('3270 Terminal'),
+                                itemId: 'addTerminal',
+                                iconCls: 'fa fa-fw fa-terminal black',
+                                // 3270 terminals are CCW devices of s390x VMs
+                                hidden:
+                                    PVE.qemu.Architecture.getNodeArchitecture(nodename) !== 's390x',
+                                disabled: !caps.vms['VM.Config.HWType'],
+                                handler: editorFactory('TerminalEdit'),
                             },
                             {
                                 text: gettext('CloudInit Drive'),

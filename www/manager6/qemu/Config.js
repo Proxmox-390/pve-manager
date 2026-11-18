@@ -463,7 +463,7 @@ Ext.define('PVE.qemu.Config', {
                     if (me.destroyed) {
                         return;
                     }
-                    let consoles = PVE.qemu.Architecture.getS390xConsoles(data.ostype);
+                    let consoles = PVE.qemu.Architecture.getS390xConsoles(data);
                     consoleBtn.setSerialConsoles(consoles);
                     me.down('#console')?.setConsoles(consoles);
                 },
