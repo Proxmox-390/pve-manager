@@ -10,7 +10,7 @@ Ext.define('PVE.window.UploadToStorage', {
 
     acceptedExtensions: {
         import: ['.ova', '.qcow2', '.raw', '.vmdk'],
-        iso: ['.img', '.iso'],
+        iso: ['.img', '.iso', '.aws'],
         vztmpl: ['.tar.gz', '.tar.xz', '.tar.zst'],
     },
 
