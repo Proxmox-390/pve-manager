@@ -176,12 +176,27 @@ Ext.define(
             let nodename = me.nodename;
             me.nodename = undefined;
 
+            // s390x: the first storage is the default for new disks and DASDs; prefer local ZFS
+            // and LVM over network storages, on which the synchronous I/O of the CKD channel
+            // programs is slow
+            let imageStorageRank = (rec) =>
+                ({ zfspool: 0, lvmthin: 1, lvm: 2, dir: 3 })[rec.data.type] ?? 4;
+            let rankImageStorages = () =>
+                me.storageContent === 'images' &&
+                PVE.qemu.Architecture.getNodeArchitecture(me.nodename) === 's390x';
+
             var store = Ext.create('Ext.data.Store', {
                 model: 'pve-storage-status',
-                sorters: {
-                    property: 'storage',
-                    direction: 'ASC',
-                },
+                sorters: [
+                    {
+                        sorterFn: (a, b) =>
+                            rankImageStorages() ? imageStorageRank(a) - imageStorageRank(b) : 0,
+                    },
+                    {
+                        property: 'storage',
+                        direction: 'ASC',
+                    },
+                ],
             });
 
             Ext.apply(me, {

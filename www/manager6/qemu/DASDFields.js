@@ -94,6 +94,7 @@ Ext.define('PVE.qemu.DASDFields', {
             field.setDisabled(!ckdCreate);
         }
         me.down('field[name=ckdSize]').setVisible(kind === 'ckd' && !me.isCreate);
+        me.down('#ckdStorageHint').setVisible(kind === 'ckd');
         me.updateCylinders();
     },
 
@@ -228,6 +229,16 @@ Ext.define('PVE.qemu.DASDFields', {
                 fieldLabel: gettext('Type'),
                 submitValue: false,
                 hidden: me.isCreate,
+            },
+            {
+                xtype: 'displayfield',
+                itemId: 'ckdStorageHint',
+                userCls: 'pmx-hint',
+                submitValue: false,
+                hidden: true,
+                value: gettext(
+                    'CKD volumes on network storage (Ceph RBD, NFS) are slow: the channel programs of the guest do synchronous I/O. Prefer local ZFS or LVM storage.',
+                ),
             },
         ];
 
