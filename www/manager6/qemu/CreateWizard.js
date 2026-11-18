@@ -61,6 +61,96 @@ Ext.define('PVE.qemu.CreateWizard', {
         return undefined;
     },
 
+    // s390x: the devices of the new VM it can IPL from, by key, with a short description
+    getIPLDevices: function (kv) {
+        let devices = [];
+        let isCloudInit = (value) => /(?:^|[:/,])[^,]*cloudinit/.test(value ?? '');
+        let bus = (re, what) =>
+            Object.keys(kv)
+                .filter((key) => re.test(key) && !isCloudInit(kv[key]))
+                .sort(
+                    (a, b) =>
+                        parseInt(a.replace(/^\D+/, ''), 10) - parseInt(b.replace(/^\D+/, ''), 10),
+                )
+                .forEach((key) => {
+                    let cdrom = /(?:^|,)media=cdrom(?:,|$)/.test(kv[key]);
+                    devices.push({ key, cdrom, text: cdrom ? gettext('CD/DVD drive') : what });
+                });
+        bus(/^tape\d+$/, gettext('Tape drive'));
+        bus(/^ckd\d+$/, gettext('CKD DASD'));
+        bus(/^fba\d+$/, gettext('FBA DASD'));
+        bus(/^virtio\d+$/, gettext('VirtIO disk'));
+        bus(/^scsi\d+$/, gettext('SCSI disk'));
+        Object.keys(kv)
+            // VirtIO only: the firmware network boot; qeth adapters cannot IPL in QEMU
+            .filter((key) => /^net\d+$/.test(key) && /^virtio\b/.test(kv[key] ?? ''))
+            .sort()
+            .forEach((key) => devices.push({ key, text: gettext('Network device') }));
+        return devices;
+    },
+
+    // s390x: the IPL device a new VM gets unless one is chosen. Linux and the network boot use
+    // the boot order (the network boot loads the installer once), mainframe operating systems IPL
+    // from the install medium, else from the first disk (DASDs first).
+    getDefaultIPLDevice: function (kv, devices) {
+        if (kv.netboot || PVE.qemu.Architecture.isS390xLinux(kv.ostype)) {
+            return undefined;
+        }
+        let cdrom = devices.find((device) => device.cdrom);
+        let first = devices.find(({ key }) => !/^net\d+$/.test(key));
+        return (kv.tape0 ? 'tape0' : undefined) ?? cdrom?.key ?? first?.key;
+    },
+
+    // s390x: update the IPL device choices of the system tab from the devices of the other tabs
+    updateIPLFields: function () {
+        let me = this;
+        let field = me.down('field[name=ipldevice]');
+        let s390x = me.getViewModel().get('current.architecture') === 's390x';
+        if (!field || !s390x || me.updatingIPL) {
+            return;
+        }
+        me.updatingIPL = true;
+        let kv = me.getValues();
+        let devices = me.getIPLDevices(kv);
+        let def = me.getDefaultIPLDevice(kv, devices);
+        let value = field.getValue();
+        if (value !== '__default__' && !devices.some(({ key }) => key === value)) {
+            value = '__default__';
+        }
+        let defaultText = def ?? gettext('boot order');
+        field.setComboItems([
+            ['__default__', `${Proxmox.Utils.defaultText} (${defaultText})`],
+            ...devices.map(({ key, text }) => [key, `${key}: ${text}`]),
+        ]);
+        field.setValue(value);
+        // a load parameter needs a device to IPL from
+        me.down('field[name=iplloadparm]').setDisabled(value === '__default__' && !def);
+        me.updatingIPL = false;
+    },
+
+    // s390x: the 'ipl' option from the IPL fields of the system tab
+    calculateIPL: function (kv) {
+        let me = this;
+        let device = kv.ipldevice; // not submitted for the default
+        let loadparm = kv.iplloadparm;
+        delete kv.ipldevice;
+        delete kv.iplloadparm;
+        if (me.getViewModel().get('current.architecture') !== 's390x') {
+            return;
+        }
+        let devices = me.getIPLDevices(kv);
+        if (!devices.some(({ key }) => key === device)) {
+            device = me.getDefaultIPLDevice(kv, devices);
+        }
+        if (device) {
+            let ipl = { device };
+            if (loadparm) {
+                ipl.loadparm = loadparm;
+            }
+            kv.ipl = PVE.Parser.printPropertyString(ipl, 'device');
+        }
+    },
+
     setArchitecture: function () {
         let me = this;
         let vm = me.getViewModel();
@@ -318,6 +408,7 @@ Ext.define('PVE.qemu.CreateWizard', {
                     if (boot) {
                         kv.boot = boot;
                     }
+                    wizard.calculateIPL(kv);
 
                     if (
                         kv.arch &&
@@ -355,6 +446,7 @@ Ext.define('PVE.qemu.CreateWizard', {
                 if (boot) {
                     kv.boot = boot;
                 }
+                wizard.calculateIPL(kv);
 
                 if (kv.arch && !PVE.qemu.Architecture.isHostArchitecture(kv.arch, nodename)) {
                     kv.kvm = 0;

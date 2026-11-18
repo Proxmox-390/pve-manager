@@ -1,9 +1,11 @@
-// IPL (initial program load) settings of s390x VMs with a non-Linux OS type, which IPL directly
-// from a CCW device: the device, one of the IPL-capable CCW devices qemu-server lists for the VM,
-// and an optional load parameter.
+// IPL (initial program load) settings of s390x VMs: the CCW device to IPL from instead of the boot
+// order, one of the IPL-capable CCW devices qemu-server lists for the VM, and an optional load
+// parameter (for Linux, it selects the zipl menu entry).
 Ext.define('PVE.qemu.IPLInputPanel', {
     extend: 'Proxmox.panel.InputPanel',
     alias: 'widget.pveQemuIPLInputPanel',
+
+    defaultText: `${Proxmox.Utils.defaultText} (${gettext('boot order')})`,
 
     onGetValues: function (values) {
         if (!values.device) {
@@ -29,7 +31,7 @@ Ext.define('PVE.qemu.IPLInputPanel', {
         let field = me.down('field[name=device]');
         let value = field.getValue();
         let wasDirty = field.isDirty();
-        field.setComboItems([['__default__', Proxmox.Utils.defaultText], ...items]);
+        field.setComboItems([['__default__', me.defaultText], ...items]);
         field.setValue(value);
         if (!wasDirty) {
             field.resetOriginalValue();
@@ -53,7 +55,9 @@ Ext.define('PVE.qemu.IPLInputPanel', {
             fieldLabel: gettext('IPL device'),
             deleteEmpty: false,
             value: '__default__',
-            comboItems: [['__default__', Proxmox.Utils.defaultText]],
+            comboItems: [
+                ['__default__', `${Proxmox.Utils.defaultText} (${gettext('boot order')})`],
+            ],
             listeners: {
                 change: function (field, value) {
                     field

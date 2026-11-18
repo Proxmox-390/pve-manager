@@ -422,11 +422,11 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
                 'url',
             );
         } else if (mediaType === 'tape') {
-            res.tape0 = values.tapeimage;
-            // mainframe operating systems IPL from the tape, Linux uses the boot order
-            if (!PVE.qemu.Architecture.isS390xLinux(vm.get('current.ostype'))) {
-                res.ipl = 'tape0';
-            }
+            // the wizard makes it the IPL device of mainframe operating systems
+            res.tape0 = PVE.Parser.printPropertyString(
+                { file: values.tapeimage, devno: values.tapedevno },
+                'file',
+            );
         } else if (mediaType === 'iso' && vm.get('cdAllowed')) {
             let [bus, index] = PVE.qemu.Architecture.defaultCDDrive.s390x;
             res[`${bus}${index}`] = PVE.Parser.printQemuDrive({
@@ -523,6 +523,17 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
             fileLabel: gettext('Tape image'),
             bind: {
                 nodename: '{nodename}',
+                disabled: '{!isTape}',
+                hidden: '{!isTape}',
+            },
+        },
+        {
+            xtype: 'pveCcwDevnoField',
+            name: 'tapedevno',
+            kind: 'tape',
+            autoSuggest: false, // a new VM, the tape range starts there
+            value: PVE.qemu.S390xMedia.defaultTapeDevno('tape0'),
+            bind: {
                 disabled: '{!isTape}',
                 hidden: '{!isTape}',
             },

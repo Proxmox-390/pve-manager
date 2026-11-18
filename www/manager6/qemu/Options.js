@@ -148,16 +148,16 @@ Ext.define('PVE.qemu.Options', {
                     return text;
                 },
             },
-            // s390x VMs with a non-Linux OS type IPL directly from a CCW device, there is no
-            // firmware boot order for them; shown instead of 'boot' then, see below
+            // s390x VMs IPL from this device, if set, instead of the boot order; the boot order
+            // is only shown for Linux, other OS types have no firmware boot order (see below)
             ipl: {
                 header: 'IPL',
                 required: true,
-                visible: false,
+                visible: s390x,
                 editor: caps.vms['VM.Config.Disk'] ? 'PVE.qemu.IPLEdit' : undefined,
                 renderer: function (value) {
                     if (!value) {
-                        return Proxmox.Utils.defaultText;
+                        return `${Proxmox.Utils.defaultText} (${gettext('boot order')})`;
                     }
                     let ipl = PVE.Parser.parsePropertyString(value, 'device');
                     let text = Ext.htmlEncode(ipl.device ?? '');
@@ -481,14 +481,17 @@ Ext.define('PVE.qemu.Options', {
         });
 
         if (s390x) {
-            // the (pending) OS type selects between the boot order and the IPL settings
+            // the (pending) OS type decides whether the boot order is shown, next to the IPL
             me.mon(me.rstore, 'load', function () {
                 let ostype = me.getObjectValue('ostype', undefined, true);
-                let ipl = !PVE.qemu.Architecture.isS390xLinux(ostype);
-                if (rows.ipl.visible !== ipl) {
-                    rows.ipl.visible = ipl;
-                    rows.boot.visible = !ipl;
-                    me.getStore().filter();
+                let boot = PVE.qemu.Architecture.isS390xLinux(ostype);
+                if (rows.boot.visible !== boot) {
+                    rows.boot.visible = boot;
+                    // apply the row filter again (store.filter() without a filter does not)
+                    let filters = me.getStore().getFilters();
+                    let rowFilters = filters.getRange();
+                    filters.removeAll();
+                    filters.add(rowFilters);
                 }
             });
         }

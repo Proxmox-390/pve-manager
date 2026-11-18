@@ -85,6 +85,10 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             },
             '#': {
                 afterrender: 'setDefaults',
+                // the IPL devices are those of the other wizard tabs
+                activate: function () {
+                    this.getView().up('pveQemuCreateWizard')?.updateIPLFields();
+                },
             },
         },
 
@@ -177,6 +181,54 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             bind: {
                 category: '{current.architecture}',
                 nodename: '{nodename}',
+            },
+        },
+        {
+            // s390x: the device to IPL from, one the wizard creates; resolved by the wizard
+            xtype: 'proxmoxKVComboBox',
+            name: 'ipldevice',
+            reference: 'ipldevice',
+            fieldLabel: gettext('IPL device'),
+            value: '__default__',
+            deleteEmpty: false,
+            comboItems: [['__default__', Proxmox.Utils.defaultText]],
+            hidden: true,
+            disabled: true,
+            bind: {
+                hidden: '{!isS390x}',
+                disabled: '{!isS390x}',
+            },
+            listeners: {
+                expand: function (field) {
+                    field.up('pveQemuCreateWizard')?.updateIPLFields();
+                },
+                change: function (field) {
+                    field.up('pveQemuCreateWizard')?.updateIPLFields();
+                },
+            },
+        },
+        {
+            xtype: 'textfield',
+            name: 'iplloadparm',
+            reference: 'iplloadparm',
+            fieldLabel: gettext('Load parameter'),
+            emptyText: gettext('none'),
+            maxLength: 8,
+            enforceMaxLength: true,
+            regex: /^[A-Z0-9. ]*$/,
+            regexText: gettext('Letters A-Z, digits 0-9, dots and spaces only'),
+            hidden: true,
+            disabled: true,
+            bind: {
+                hidden: '{!isS390x}',
+            },
+            listeners: {
+                change: function (field, value) {
+                    let upper = value?.toUpperCase();
+                    if (upper !== value) {
+                        field.setValue(upper);
+                    }
+                },
             },
         },
         {
