@@ -92,9 +92,6 @@ my sub get_ceph_release_def {
             'available-for-pve-release' => {
                 9 => 1,
             },
-            'unavailable-for-arch' => {
-                s390x => 1, # s390x port: only squid is built so far
-            },
         },
         umbrella => {
             release => '21.2',
@@ -103,7 +100,7 @@ my sub get_ceph_release_def {
                 9 => 1,
             },
             'unavailable-for-arch' => {
-                s390x => 1, # s390x port: only squid is built so far
+                s390x => 1, # s390x port: only squid and tentacle are built
             },
         },
     };
