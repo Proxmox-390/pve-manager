@@ -15,7 +15,7 @@ Ext.define('PVE.form.FileSelector', {
     // is not mistaken for a foreign arch and hidden.
     templateArch: function (volid) {
         var arch = volid?.match(/_([a-z][a-z0-9]*)\.tar(?:\.\w+)?$/)?.[1];
-        var known = ['amd64', 'arm64', 'i386', 'riscv64'];
+        var known = ['amd64', 'arm64', 'i386', 'riscv64', 's390x'];
         return known.includes(arch) ? arch : undefined;
     },
 
