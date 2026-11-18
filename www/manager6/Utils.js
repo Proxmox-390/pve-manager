@@ -1473,7 +1473,8 @@ Ext.define('PVE.Utils', {
             PVE.Utils.openConsoleWindow(dv, consoleType, vmid, nodename, vmname, cmd);
         },
 
-        openConsoleWindow: function (viewer, consoleType, vmid, nodename, vmname, cmd) {
+        // serial: the VM serial terminal interface to open with xterm.js, the default if unset
+        openConsoleWindow: function (viewer, consoleType, vmid, nodename, vmname, cmd, serial) {
             if (vmid === undefined && (consoleType === 'kvm' || consoleType === 'lxc')) {
                 throw 'missing vmid';
             }
@@ -1484,7 +1485,7 @@ Ext.define('PVE.Utils', {
             if (viewer === 'html5') {
                 PVE.Utils.openVNCViewer(consoleType, vmid, nodename, vmname, cmd);
             } else if (viewer === 'xtermjs') {
-                Proxmox.Utils.openXtermJsViewer(consoleType, vmid, nodename, vmname, cmd);
+                Proxmox.Utils.openXtermJsViewer(consoleType, vmid, nodename, vmname, cmd, serial);
             } else if (viewer === 'vv') {
                 let url = '/nodes/' + nodename + '/spiceshell';
                 let params = {
