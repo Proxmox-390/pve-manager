@@ -34,6 +34,25 @@ Ext.define('PVE.window.GuestImport', {
             widget.setNodename(view.nodename);
         },
 
+        // e.g. qeth adapters on s390x, which the default NIC model list does not have
+        setNetModelArchitecture: function (_column, widget, record) {
+            let me = this;
+            let view = me.getView();
+            let arch = PVE.qemu.Architecture.getNodeArchitecture(view.nodename);
+            widget.setArchitecture?.(arch, view.vmConfig?.ostype, record?.data.model);
+            if (record?.data.model) {
+                widget.setValue(record.data.model);
+            }
+        },
+
+        renderDiskOptions: function (value) {
+            return Ext.htmlEncode(
+                Object.entries(value ?? {})
+                    .map(([key, val]) => `${key}=${val}`)
+                    .join(', '),
+            );
+        },
+
         diskStorageChange: function (storageSelector, value) {
             let me = this;
 
@@ -402,10 +421,12 @@ Ext.define('PVE.window.GuestImport', {
                             }
                             let data = {
                                 ...rec.data,
+                                ...(rec.data.options ?? {}), // e.g. CCW device numbers
                             };
                             delete data.enable;
                             delete data.id;
                             delete data.size;
+                            delete data.options;
                             if (!data.file) {
                                 data.file = defaultStorage;
                                 data.format = defaultFormat;
@@ -716,6 +737,13 @@ Ext.define('PVE.window.GuestImport', {
                                     },
                                 },
                                 {
+                                    text: gettext('Options'),
+                                    dataIndex: 'options',
+                                    reference: 'diskOptionsColumn',
+                                    hidden: true,
+                                    renderer: 'renderDiskOptions',
+                                },
+                                {
                                     text: gettext('Size'),
                                     dataIndex: 'size',
                                     renderer: (value) => {
@@ -919,6 +947,7 @@ Ext.define('PVE.window.GuestImport', {
                                         isFormField: false,
                                         allowBlank: false,
                                     },
+                                    onWidgetAttach: 'setNetModelArchitecture',
                                 },
                                 {
                                     text: gettext('Bridge'),
@@ -1049,6 +1078,12 @@ Ext.define('PVE.window.GuestImport', {
                     ),
                     '<a href="https://pve.proxmox.com/wiki/OVMF/UEFI_Boot_Entries">OVMF/UEFI Boot Entries</a>',
                 ),
+                'foreign-architecture': gettext(
+                    "The guest was exported from a '{1}' host, only its generic OVF description is used",
+                ),
+                'tape-medium-missing': gettext(
+                    "The tape medium '{1}' of '{0}' is not available here, the tape drive will be empty",
+                ),
                 'ova-needs-extracting': gettext(
                     'Importing an OVA temporarily requires extra space on the working storage while extracting the contained disks for further processing.',
                 ),
@@ -1083,7 +1118,11 @@ Ext.define('PVE.window.GuestImport', {
                         size,
                         'import-from': volid,
                         format: 'raw',
+                        options: value?.options,
                     });
+                }
+                if (disks.some((disk) => Object.keys(disk.options ?? {}).length)) {
+                    me.lookup('diskOptionsColumn').setHidden(false);
                 }
 
                 let nets = [];
