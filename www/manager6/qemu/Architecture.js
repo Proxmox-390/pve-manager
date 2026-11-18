@@ -69,7 +69,7 @@ Ext.define('PVE.qemu.Architecture', {
     allowedBusses: {
         x86_64: ['ide', 'sata', 'virtio', 'scsi', 'unused'],
         aarch64: ['sata', 'virtio', 'scsi', 'unused'],
-        s390x: ['virtio', 'scsi', 'unused'],
+        s390x: ['virtio', 'scsi', 'fba', 'ckd', 'unused'], // fba/ckd: DASDs
     },
 
     allowedFirmware: {

@@ -263,6 +263,7 @@ JSSRC= 							\
 	qemu/CmdMenu.js					\
 	qemu/Config.js					\
 	qemu/CreateWizard.js				\
+	qemu/DASDFields.js				\
 	qemu/DisplayEdit.js				\
 	qemu/HDEdit.js					\
 	qemu/HDEfi.js					\

@@ -18,6 +18,7 @@ Ext.define('PVE.qemu.HDInputPanel', {
             isSCSI: false,
             isVirtIO: false,
             isSCSISingle: false,
+            isDASD: false, // s390x FBA or CKD DASD
         },
     },
 
@@ -31,8 +32,25 @@ Ext.define('PVE.qemu.HDInputPanel', {
             let value = field.getValue();
             vm.set('isSCSI', value.match(/^scsi/));
             vm.set('isVirtIO', value.match(/^virtio/));
+            me.setDASDKind(value);
 
             me.fireIdChange();
+        },
+
+        // show the DASD settings for 'fba' and 'ckd', hide the ones DASDs do not have
+        setDASDKind: function (controller) {
+            let view = this.getView();
+            let kind = controller?.match(/^(fba|ckd)/)?.[1];
+            this.getViewModel().set('isDASD', !!kind);
+            view.dasdFields?.setKind(kind);
+
+            // the size of a new CKD volume comes from its model
+            let storageSelector = view.lookup('new-disk');
+            if (storageSelector) {
+                storageSelector.hideSize = kind === 'ckd';
+                let storage = storageSelector.getComponent('hdstorage');
+                storageSelector.changeStorage(storage, storage.getValue());
+            }
         },
 
         fireIdChange: function () {
@@ -64,6 +82,7 @@ Ext.define('PVE.qemu.HDInputPanel', {
             if (view.confid) {
                 vm.set('isSCSI', view.confid.match(/^scsi/));
                 vm.set('isVirtIO', view.confid.match(/^virtio/));
+                this.setDASDKind(view.confid);
             }
         },
     },
@@ -74,6 +93,9 @@ Ext.define('PVE.qemu.HDInputPanel', {
         var params = {};
         var confid = me.confid || values.controller + values.deviceid;
 
+        let targetId = me.unused ? values.controller + values.deviceid : confid;
+        let dasd = targetId.match(/^(fba|ckd)\d+$/)?.[1];
+
         if (me.unused) {
             me.drive.file = me.vmconfig[values.unusedId];
             confid = values.controller + values.deviceid;
@@ -81,7 +103,8 @@ Ext.define('PVE.qemu.HDInputPanel', {
             if (values.hdimage) {
                 me.drive.file = values.hdimage;
             } else {
-                let disksize = values['import-from'] ? 0 : values.disksize;
+                // the size of a new CKD volume comes from its model or cylinders
+                let disksize = values['import-from'] || dasd === 'ckd' ? 0 : values.disksize;
                 me.drive.file = `${values.hdstorage}:${disksize}`;
                 PVE.Utils.propertyStringSet(me.drive, values['import-from'], 'import-from');
             }
@@ -102,6 +125,10 @@ Ext.define('PVE.qemu.HDInputPanel', {
             PVE.Utils.propertyStringSet(me.drive, values[name], name);
             PVE.Utils.propertyStringSet(me.drive, values[burst_name], burst_name);
         });
+
+        if (dasd) {
+            me.dasdFields.applyToDrive(me.drive);
+        }
 
         params[confid] = PVE.Parser.printQemuDrive(me.drive);
 
@@ -167,6 +194,10 @@ Ext.define('PVE.qemu.HDInputPanel', {
         values.iops_wr_max = drive.iops_wr_max;
 
         me.setValues(values);
+
+        if (me.confid?.match(/^(fba|ckd)\d+$/)) {
+            me.dasdFields.setDrive(drive);
+        }
     },
 
     setNodename: function (nodename) {
@@ -179,6 +210,7 @@ Ext.define('PVE.qemu.HDInputPanel', {
         me.lookup('import-source-file')?.setNodename(nodename);
         me.lookup('import-target')?.setNodename(nodename);
         me.lookup('controllerSelector')?.setNodename(nodename);
+        me.dasdFields?.setNodename(nodename);
     },
 
     hasAdvanced: true,
@@ -304,18 +336,42 @@ Ext.define('PVE.qemu.HDInputPanel', {
             });
         }
 
+        // the s390x DASD settings, only shown for the 'fba' and 'ckd' busses
+        me.dasdFields = Ext.create('PVE.qemu.DASDFields', {
+            kind: undefined,
+            isCreate: !!me.isCreate && !me.unused,
+            importDisk: me.importDisk,
+            nodename: me.nodename,
+            vmid: me.vmid,
+            autoSuggestDevno: !me.confid || !!me.unused,
+            hidden: true,
+            bind: {
+                hidden: '{!isDASD}',
+            },
+        });
+        column1.push(me.dasdFields);
+
+        // DASDs have no cache, discard, I/O thread, SSD, async I/O or bandwidth settings
         column2.push(
             {
                 xtype: 'CacheTypeSelector',
                 name: 'cache',
                 value: '__default__',
                 fieldLabel: gettext('Cache'),
+                bind: {
+                    hidden: '{isDASD}',
+                    disabled: '{isDASD}',
+                },
             },
             {
                 xtype: 'proxmoxcheckbox',
                 fieldLabel: gettext('Discard'),
                 reference: 'discard',
                 name: 'discard',
+                bind: {
+                    hidden: '{isDASD}',
+                    disabled: '{isDASD}',
+                },
             },
             {
                 xtype: 'proxmoxcheckbox',
@@ -326,11 +382,13 @@ Ext.define('PVE.qemu.HDInputPanel', {
                     me.insideWizard || me.isCreate
                         ? {
                               disabled: '{!isVirtIO && !isSCSI}',
+                              hidden: '{isDASD}',
                               // Checkbox.setValue handles Arrays in a different way, therefore cast to bool
                               value: '{!!isVirtIO || (isSCSI && isSCSISingle)}',
                           }
                         : {
                               disabled: '{!isVirtIO && !isSCSI}',
+                              hidden: '{isDASD}',
                           },
             },
         );
@@ -342,7 +400,8 @@ Ext.define('PVE.qemu.HDInputPanel', {
                 name: 'ssd',
                 clearOnDisable: true,
                 bind: {
-                    disabled: '{isVirtIO}',
+                    disabled: '{isVirtIO || isDASD}',
+                    hidden: '{isDASD}',
                 },
             },
             {
@@ -352,7 +411,7 @@ Ext.define('PVE.qemu.HDInputPanel', {
                 fieldLabel: gettext('Read-only'),
                 clearOnDisable: true,
                 bind: {
-                    disabled: '{!isVirtIO && !isSCSI}',
+                    disabled: '{!isVirtIO && !isSCSI && !isDASD}',
                 },
             },
         );
@@ -381,6 +440,10 @@ Ext.define('PVE.qemu.HDInputPanel', {
                 fieldLabel: gettext('Async IO'),
                 allowBlank: false,
                 value: '__default__',
+                bind: {
+                    hidden: '{isDASD}',
+                    disabled: '{isDASD}',
+                },
                 comboItems: [
                     ['__default__', Proxmox.Utils.defaultText + ' (io_uring)'],
                     ['io_uring', 'io_uring'],
@@ -492,6 +555,9 @@ Ext.define('PVE.qemu.HDInputPanel', {
                         title: gettext('Bandwidth'),
                         xtype: 'inputpanel',
                         reference: 'bwpanel',
+                        bind: {
+                            disabled: '{isDASD}',
+                        },
                         column1: bwColumn1,
                         column2: bwColumn2,
                         showAdvanced: me.showAdvanced,
@@ -537,6 +603,7 @@ Ext.define('PVE.qemu.HDEdit', {
         var ipanel = Ext.create('PVE.qemu.HDInputPanel', {
             confid: me.confid,
             nodename: nodename,
+            vmid: me.pveSelNode.data.vmid,
             unused: unused,
             isCreate: me.isCreate,
             importDisk: me.importDisk,
@@ -546,6 +613,10 @@ Ext.define('PVE.qemu.HDEdit', {
             me.subject = gettext('Unused Disk');
         } else if (me.isCreate) {
             me.subject = gettext('Hard Disk');
+        } else if (me.confid.match(/^fba\d+$/)) {
+            me.subject = gettext('FBA DASD') + ' (' + me.confid + ')';
+        } else if (me.confid.match(/^ckd\d+$/)) {
+            me.subject = gettext('CKD DASD') + ' (' + me.confid + ')';
         } else {
             me.subject = gettext('Hard Disk') + ' (' + me.confid + ')';
         }

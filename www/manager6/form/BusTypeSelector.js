@@ -21,6 +21,10 @@ Ext.define('PVE.form.BusTypeSelector', {
 
         me.comboItems.push(['scsi', 'SCSI']);
 
+        // s390x only, see PVE.qemu.Architecture.allowedBusses
+        me.comboItems.push(['fba', gettext('FBA DASD')]);
+        me.comboItems.push(['ckd', gettext('CKD DASD (3390)')]);
+
         if (me.withUnused) {
             me.comboItems.push(['unused', 'Unused']);
         }

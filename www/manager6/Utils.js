@@ -12,7 +12,7 @@ Ext.define('PVE.Utils', {
 
         toolkit: undefined, // (extjs|touch), set inside Toolkit.js
 
-        bus_match: /^(ide|sata|virtio|scsi)(\d+)$/,
+        bus_match: /^(ide|sata|virtio|scsi|fba|ckd)(\d+)$/,
 
         log_severity_hash: {
             0: 'panic',
@@ -1789,6 +1789,8 @@ Ext.define('PVE.Utils', {
             sata: 6,
             scsi: 31,
             virtio: 16,
+            fba: 32, // s390x FBA DASD
+            ckd: 64, // s390x CKD DASD
             unused: 256,
         },
 
@@ -2106,7 +2108,11 @@ Ext.define('PVE.Utils', {
         },
 
         sortByPreviousUsage: function (vmconfig, nodename) {
-            let controllerList = ['ide', 'virtio', 'scsi', 'sata'];
+            let arch = PVE.qemu.Architecture.getGuestArchitecture(vmconfig.arch, nodename);
+            let allowed = PVE.qemu.Architecture.allowedBusses[arch];
+            let controllerList = ['ide', 'virtio', 'scsi', 'sata', 'fba', 'ckd'].filter(
+                (controller) => !allowed || allowed.includes(controller),
+            );
             let usedControllers = {};
             for (const type of Object.keys(PVE.Utils.diskControllerMaxIDs)) {
                 usedControllers[type] = 0;
@@ -2122,13 +2128,12 @@ Ext.define('PVE.Utils', {
                 }
             }
 
-            let arch = PVE.qemu.Architecture.getGuestArchitecture(vmconfig.arch, nodename);
             let sortPriority = PVE.qemu.OSDefaults.getDefaults(vmconfig.ostype, arch).busPriority;
 
             let sortedList = Ext.clone(controllerList);
             sortedList.sort(function (a, b) {
                 if (usedControllers[b] === usedControllers[a]) {
-                    return sortPriority[b] - sortPriority[a];
+                    return (sortPriority[b] ?? 0) - (sortPriority[a] ?? 0);
                 }
                 return usedControllers[b] - usedControllers[a];
             });
