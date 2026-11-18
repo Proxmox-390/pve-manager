@@ -207,6 +207,10 @@ Ext.define('PVE.qemu.CmdMenu', {
                 text: gettext('Console'),
                 iconCls: 'fa fa-fw fa-terminal',
                 handler: function () {
+                    if (PVE.qemu.Architecture.getNodeArchitecture(info.node) === 's390x') {
+                        PVE.Utils.openS390xConsoleWindow(info.vmid, info.node, info.name);
+                        return;
+                    }
                     Proxmox.Utils.API2Request({
                         url: `/nodes/${info.node}/qemu/${info.vmid}/status/current`,
                         failure: (response, opts) => Ext.Msg.alert('Error', response.htmlStatus),
