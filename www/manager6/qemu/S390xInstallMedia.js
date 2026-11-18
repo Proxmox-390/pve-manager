@@ -96,7 +96,6 @@ Ext.define('PVE.qemu.TapeInputPanel', {
         let field = me.down('field[name=confid]');
         if (free) {
             field.setValue(free);
-            me.down('field[name=devno]').setEmptyText(PVE.qemu.S390xMedia.defaultTapeDevno(free));
         } else {
             field.markInvalid(gettext('All tape drives are in use'));
         }
@@ -108,7 +107,8 @@ Ext.define('PVE.qemu.TapeInputPanel', {
         me.setValues({
             mediaType: tape.file === 'none' ? 'none' : 'image',
             tapeimage: tape.file === 'none' ? undefined : tape.file,
-            devno: tape.devno ?? '',
+            // without one, the drive has the default address of its index
+            devno: tape.devno ?? PVE.qemu.S390xMedia.defaultTapeDevno(me.confid),
             ident: tape.ident ?? '__default__',
         });
     },
@@ -156,19 +156,17 @@ Ext.define('PVE.qemu.TapeInputPanel', {
                 inputValue: 'none',
                 boxLabel: gettext('Empty drive'),
             },
+            {
+                xtype: 'pveCcwDevnoField',
+                name: 'devno',
+                kind: 'tape',
+                nodename: me.nodename,
+                autoSuggest: !me.confid, // an existing drive shows its address
+            },
         );
 
         me.items = items;
         me.advancedItems = [
-            {
-                xtype: 'proxmoxtextfield',
-                name: 'devno',
-                fieldLabel: gettext('Device number'),
-                regex: /^(?:0\.[0-3]\.[0-9a-fA-F]{1,4}|[0-9a-fA-F]{3,4})$/,
-                regexText: '0.0.0580',
-                emptyText: me.confid ? PVE.qemu.S390xMedia.defaultTapeDevno(me.confid) : '',
-                deleteEmpty: false,
-            },
             {
                 xtype: 'proxmoxKVComboBox',
                 name: 'ident',
@@ -210,6 +208,7 @@ Ext.define('PVE.qemu.TapeEdit', {
             confid: me.confid,
             nodename,
         });
+        let vmid = me.pveSelNode.data.vmid;
 
         Ext.applyIf(me, {
             subject: gettext('Tape Drive'),
@@ -225,6 +224,7 @@ Ext.define('PVE.qemu.TapeEdit', {
                 if (me.confid && conf[me.confid]) {
                     ipanel.setTape(conf[me.confid]);
                 }
+                ipanel.down('pveCcwDevnoField').setVMConfig(nodename, vmid);
             },
         });
     },
