@@ -1508,6 +1508,26 @@ Ext.define('PVE.Utils', {
             }
         },
 
+        // s390x VMs have no VGA display: open their first console (by OS type) in xterm.js
+        openS390xConsoleWindow: function (vmid, nodename, vmname) {
+            Proxmox.Utils.API2Request({
+                url: `/nodes/${nodename}/qemu/${vmid}/config`,
+                failure: (response) => Ext.Msg.alert('Error', response.htmlStatus),
+                success: function ({ result: { data } }) {
+                    let serial = PVE.qemu.Architecture.getS390xConsoles(data.ostype)[0].serial;
+                    PVE.Utils.openConsoleWindow(
+                        'xtermjs',
+                        'kvm',
+                        vmid,
+                        nodename,
+                        vmname,
+                        undefined,
+                        serial,
+                    );
+                },
+            });
+        },
+
         defaultViewer: function (consoles, type) {
             var allowSpice, allowXtermjs;
 
@@ -1616,6 +1636,10 @@ Ext.define('PVE.Utils', {
             let vmid = record.data.vmid;
             let vmname = record.data.name;
             if (record.data.type === 'qemu' && !record.data.template) {
+                if (PVE.qemu.Architecture.getNodeArchitecture(nodename) === 's390x') {
+                    PVE.Utils.openS390xConsoleWindow(vmid, nodename, vmname);
+                    return;
+                }
                 Proxmox.Utils.API2Request({
                     url: `/nodes/${nodename}/qemu/${vmid}/status/current`,
                     failure: (response) => Ext.Msg.alert('Error', response.htmlStatus),
