@@ -417,6 +417,14 @@ Ext.define('PVE.qemu.HardwareView', {
                 editor: caps.vms['VM.Config.HWType'] ? 'PVE.qemu.TerminalEdit' : undefined,
                 never_delete: !caps.vms['VM.Config.HWType'],
                 header: gettext('3270 Terminal') + ' (' + confid + ')',
+                renderer: function (value) {
+                    let terminal = PVE.Parser.parsePropertyString(value, 'devno');
+                    let text = terminal.devno ?? '';
+                    if (terminal.model) {
+                        text += `, ${gettext('Model')} 3279-${terminal.model}`;
+                    }
+                    return Ext.htmlEncode(text);
+                },
             };
         }
         rows.audio0 = {
@@ -822,6 +830,11 @@ Ext.define('PVE.qemu.HardwareView', {
                 me.down('#addNetboot').setDisabled(
                     noVMConfigCDROMPerm || !!me.getObjectValue('netboot', undefined, true),
                 );
+                // the virtio consoles and the virtio RNG need Linux drivers
+                let ostype = me.getObjectValue('ostype', undefined, true);
+                let linux = PVE.qemu.Architecture.isS390xLinux(ostype);
+                me.down('#addSerial').setHidden(!linux);
+                me.down('#addRng').setHidden(!linux);
             }
 
             // s390x: only the VirtIO disks and network devices can be hot-plugged, the
@@ -986,6 +999,7 @@ Ext.define('PVE.qemu.HardwareView', {
                             {
                                 text: gettext('USB Device'),
                                 itemId: 'addUsb',
+                                hidden: isS390x, // no USB on s390x
                                 iconCls: 'fa fa-fw fa-usb black',
                                 disabled:
                                     !caps.nodes['Sys.Console'] && !caps.mapping['Mapping.Use'],
@@ -994,6 +1008,7 @@ Ext.define('PVE.qemu.HardwareView', {
                             {
                                 text: gettext('PCI Device'),
                                 itemId: 'addPci',
+                                hidden: isS390x, // no PCI passthrough on s390x
                                 iconCls: 'pve-itype-icon-pci',
                                 disabled:
                                     !caps.nodes['Sys.Console'] && !caps.mapping['Mapping.Use'],
@@ -1027,6 +1042,7 @@ Ext.define('PVE.qemu.HardwareView', {
                             {
                                 text: gettext('Audio Device'),
                                 itemId: 'addAudio',
+                                hidden: isS390x, // only PCI audio devices
                                 iconCls: 'fa fa-fw fa-volume-up black',
                                 disabled: !caps.vms['VM.Config.HWType'],
                                 handler: editorFactory('AudioEdit'),
@@ -1042,6 +1058,7 @@ Ext.define('PVE.qemu.HardwareView', {
                             {
                                 text: gettext('Virtiofs'),
                                 itemId: 'addVirtiofs',
+                                hidden: isS390x, // vhost-user-fs-pci only
                                 iconCls: 'fa fa-folder',
                                 disabled: !caps.nodes['Sys.Console'],
                                 handler: editorFactory('VirtiofsEdit'),
