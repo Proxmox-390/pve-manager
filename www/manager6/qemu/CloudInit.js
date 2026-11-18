@@ -108,7 +108,7 @@ Ext.define('PVE.qemu.CloudInit', {
             var id = record.data.key;
             var value = record.data.value;
             var ciregex = new RegExp('vm-' + me.pveSelNode.data.vmid + '-cloudinit');
-            if (id.match(/^(ide|scsi|sata)\d+$/) && ciregex.test(value)) {
+            if (id.match(/^(ide|scsi|sata|fba)\d+$/) && ciregex.test(value)) {
                 found = id;
                 me.ciDriveId = found;
                 me.ciDrive = value;
@@ -313,7 +313,7 @@ Ext.define('PVE.qemu.CloudInit', {
             };
         }
 
-        PVE.Utils.forEachBus(['ide', 'scsi', 'sata'], function (type, id) {
+        PVE.Utils.forEachBus(['ide', 'scsi', 'sata', 'fba'], function (type, id) {
             me.rows[type + id] = {
                 visible: false,
             };
