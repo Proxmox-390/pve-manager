@@ -21,6 +21,9 @@ Ext.define('PVE.qemu.Config', {
 
         var template = !!vm.template;
 
+        // s390x VMs have no VGA display, but SCLP and 3270 consoles depending on the OS type
+        let s390x = PVE.qemu.Architecture.getNodeArchitecture(nodename) === 's390x';
+
         var running = !!vm.uptime;
 
         var caps = Ext.state.Manager.get('GuiCap');
@@ -307,7 +310,7 @@ Ext.define('PVE.qemu.Config', {
                 title: gettext('Console'),
                 itemId: 'console',
                 iconCls: 'fa fa-terminal',
-                xtype: 'pveNoVncConsole',
+                xtype: s390x ? 'pveQemuS390xConsole' : 'pveNoVncConsole',
                 vmid: vmid,
                 consoleType: 'kvm',
                 nodename: nodename,
@@ -451,6 +454,21 @@ Ext.define('PVE.qemu.Config', {
         }
 
         me.callParent();
+
+        if (s390x && caps.vms['VM.Console'] && !template) {
+            // changing the OS type needs a restart of the VM anyway
+            Proxmox.Utils.API2Request({
+                url: base_url + '/config',
+                success: function ({ result: { data } }) {
+                    if (me.destroyed) {
+                        return;
+                    }
+                    let consoles = PVE.qemu.Architecture.getS390xConsoles(data.ostype);
+                    consoleBtn.setSerialConsoles(consoles);
+                    me.down('#console')?.setConsoles(consoles);
+                },
+            });
+        }
 
         var prevQMPStatus = 'unknown';
         me.mon(me.statusStore, 'load', function (s, records, success) {
