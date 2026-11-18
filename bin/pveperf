@@ -24,16 +24,23 @@ sub drop_cache {
 
 sub test_bogomips {
     my $bogomips = 0;
+    my ($bogomips_per_cpu, $cpus);
 
     open(TMP, "/proc/cpuinfo");
 
     while (my $line = <TMP>) {
         if ($line =~ m/^bogomips\s*:\s*(\d+\.\d+)\s*$/i) {
             $bogomips += $1;
+        } elsif ($line =~ m/^bogomips per cpu\s*:\s*(\d+\.\d+)\s*$/) {
+            $bogomips_per_cpu = $1; # s390x
+        } elsif ($line =~ m/^# processors\s*:\s*(\d+)\s*$/) {
+            $cpus = $1;
         }
     }
 
     close(TMP);
+
+    $bogomips += $bogomips_per_cpu * $cpus if defined($bogomips_per_cpu) && defined($cpus);
 
     printf "CPU BOGOMIPS:      %.2f\n", $bogomips;
 }
