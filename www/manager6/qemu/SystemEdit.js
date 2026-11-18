@@ -100,9 +100,10 @@ Ext.define('PVE.qemu.SystemInputPanel', {
                 me.lookup('addtpmbox').setValue(true);
             }
 
-            // mainframe operating systems need a 3270 terminal, Linux has its SCLP console
+            // mainframe operating systems need 3270 terminals: the console and user sessions
+            // (bringing up the network of a mainframe operating system takes one); Linux has its SCLP console
             let terminals = architecture === 's390x' && !PVE.qemu.Architecture.isS390xLinux(ostype);
-            me.lookup('terminals').setValue(terminals ? 1 : 0);
+            me.lookup('terminals').setValue(terminals ? 4 : 0);
             if (architecture === 's390x') {
                 return; // the machine selector selects the default for new VMs itself
             }
