@@ -13,6 +13,9 @@ Ext.define('PVE.qemu.CIDriveInputPanel', {
         var params = {};
         drive.file = values.hdstorage + ':cloudinit';
         drive.format = values.diskformat;
+        if (values.controller === 'fba') {
+            drive.devno = values.devno; // s390x
+        }
         params[values.controller + values.deviceid] = PVE.Parser.printQemuDrive(drive);
         return params;
     },
@@ -27,6 +30,21 @@ Ext.define('PVE.qemu.CIDriveInputPanel', {
     setVMConfig: function (config) {
         var me = this;
         me.down('#drive').setVMConfig(config, 'cdrom');
+
+        // s390x has no IDE or SATA, its cloud-init drive is an FBA DASD with a device number
+        let arch = PVE.qemu.Architecture.getGuestArchitecture(config.arch, me.nodename);
+        let s390x = arch === 's390x';
+        let bus = me.down('#drive').down('field[name=controller]');
+        if (s390x) {
+            bus.setValue('fba');
+        }
+        bus.setReadOnly(s390x);
+        let devno = me.down('pveCcwDevnoField');
+        devno.setVisible(s390x);
+        devno.setDisabled(!s390x);
+        if (s390x) {
+            devno.setVMConfig(me.nodename, me.vmid);
+        }
     },
 
     initComponent: function () {
@@ -42,6 +60,13 @@ Ext.define('PVE.qemu.CIDriveInputPanel', {
                 fieldLabel: gettext('CloudInit Drive'),
                 nodename: me.nodename,
                 name: 'drive',
+            },
+            {
+                xtype: 'pveCcwDevnoField',
+                name: 'devno',
+                kind: 'fba',
+                hidden: true,
+                disabled: true,
             },
             {
                 xtype: 'pveDiskStorageSelector',
@@ -75,6 +100,7 @@ Ext.define('PVE.qemu.CIDriveEdit', {
                 xtype: 'pveCIDriveInputPanel',
                 itemId: 'cipanel',
                 nodename: nodename,
+                vmid: me.pveSelNode.data.vmid,
             },
         ];
 
