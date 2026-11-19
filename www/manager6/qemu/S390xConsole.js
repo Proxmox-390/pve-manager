@@ -55,16 +55,17 @@ Ext.define('PVE.qemu.S390xConsole', {
         });
     },
 
-    // consoles: [{ serial: <serial terminal interface>, text: <tab title> }], see
-    // PVE.qemu.Architecture.getS390xConsoles
+    // consoles: [{ serial: <serial terminal interface>, text: <tab title>, model: <3270 model> }],
+    // see PVE.qemu.Architecture.getS390xConsoles
     setConsoles: function (consoles) {
         let me = this;
 
         me.removeAll();
         me.add(
-            consoles.map(({ serial, text }) => ({
+            consoles.map(({ serial, text, model }) => ({
                 title: text,
                 serial,
+                model3270: model,
                 layout: 'fit',
                 border: false,
                 items: [{ xtype: 'uxiframe', itemId: 'frame' }],
@@ -77,7 +78,7 @@ Ext.define('PVE.qemu.S390xConsole', {
         me.loadConsole(me.getActiveTab());
     },
 
-    consoleUrl: function (serial) {
+    consoleUrl: function (serial, model) {
         let me = this;
 
         let query = {
@@ -89,6 +90,10 @@ Ext.define('PVE.qemu.S390xConsole', {
             resize: Ext.state.Manager.getProvider().get('novnc-scaling', 'scale'),
             'unload-prompt': 0,
         };
+        if (model) {
+            // xterm.js keeps the terminal at least at the size of the 3270 screen
+            query.model = model;
+        }
         return '/?' + Ext.Object.toQueryString(query);
     },
 
@@ -105,7 +110,7 @@ Ext.define('PVE.qemu.S390xConsole', {
         }
         let frame = tab.down('#frame');
         tab.consoleLoaded = true;
-        frame.load(me.consoleUrl(tab.serial));
+        frame.load(me.consoleUrl(tab.serial, tab.model3270));
         frame.focus();
     },
 

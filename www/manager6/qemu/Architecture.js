@@ -102,23 +102,25 @@ Ext.define('PVE.qemu.Architecture', {
     // serial terminal interfaces, from the VM config, the one of the operating system first. By
     // OS type, Linux uses the VT220 SCLP console. Other (mainframe) OSes use one of the 3270
     // terminals as system console, so these come first, named and ordered by their device
-    // number, followed by the line-mode SCLP console and the integrated (SCLP) 3270 console.
+    // number, followed by the line-mode SCLP console and the integrated (SCLP) 3270 console. The
+    // 3270 ones have the 3270 model they emulate as 'model'.
     getS390xConsoles: function (conf) {
         let terminals = [];
         for (let i = 0; i < PVE.Utils.hardware_counts.terminal; i++) {
             let key = `terminal${i}`;
             if (conf[key]) {
-                let devno = PVE.Parser.parsePropertyString(conf[key], 'devno').devno ?? '';
-                let [ssid, number] = PVE.qemu.Architecture.splitCcwDevno(devno);
+                let terminal = PVE.Parser.parsePropertyString(conf[key], 'devno');
+                let [ssid, number] = PVE.qemu.Architecture.splitCcwDevno(terminal.devno ?? '');
                 terminals.push({
                     serial: key,
                     text: number !== undefined ? `3270 0.${ssid}.${number}` : `3270 ${key}`,
+                    model: terminal.model ?? '2',
                     order: number !== undefined ? parseInt(ssid + number, 16) : Infinity,
                 });
             }
         }
         terminals.sort((a, b) => a.order - b.order);
-        terminals = terminals.map(({ serial, text }) => ({ serial, text }));
+        terminals = terminals.map(({ serial, text, model }) => ({ serial, text, model }));
 
         if (PVE.qemu.Architecture.isS390xLinux(conf.ostype)) {
             return [{ serial: 'sclp', text: 'xterm.js' }, ...terminals];
@@ -126,7 +128,8 @@ Ext.define('PVE.qemu.Architecture', {
         return [
             ...terminals,
             { serial: 'sclplm', text: gettext('SCLP line mode') },
-            { serial: '3270', text: gettext('SCLP 3270 console') },
+            // qemu-server always emulates a model 2 for it
+            { serial: '3270', text: gettext('SCLP 3270 console'), model: '2' },
         ];
     },
 
