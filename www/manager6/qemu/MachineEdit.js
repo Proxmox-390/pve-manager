@@ -114,6 +114,9 @@ Ext.define('PVE.qemu.MachineInputPanel', {
                 values.machine = defaultMachine;
                 me.setAdvancedVisible(true);
             }
+            // The s390x machine list loads asynchronously: the selector keeps a value until then,
+            // but the binding of its value to 'type' would set the initial one again later.
+            me.getViewModel().set('type', values.machine);
             me.lookup('machine').setNodename(values.nodename);
             this.callParent(arguments);
             this.getController().setVersionFilter(values.machine);
