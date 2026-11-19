@@ -1,0 +1,72 @@
+Manufacturer:         IBM             
+Type:                 3907
+LIC Identifier:       600124ff5babe656
+Model:                Z06              ZR1             
+Sequence Code:        0000000000012345
+Plant:                02  
+Model Capacity:       Z06              00000998
+Model Perm. Capacity: Z06              00000998
+Model Temp. Capacity: Z06              00000998
+Nominal Cap. Rating:  00000998
+Nominal Perm. Rating: 00000998
+Nominal Temp. Rating: 00000998
+Type 1 Percentage:    0
+Type 2 Percentage:    0
+Type 3 Percentage:    0
+Type 4 Percentage:    0
+Type 5 Percentage:    0
+
+CPU Topology HW:      0 0 4 2 3 10
+CPU Topology SW:      0 0 4 2 3 10
+CPUs Total:           12
+CPUs Configured:      6
+CPUs Standby:         0
+CPUs Reserved:        6
+CPUs G-MTID:          0
+CPUs S-MTID:          1
+Capability:           536
+Nominal Capability:   536
+Secondary Capability: 536
+Adjustment 02-way:    61603
+Adjustment 03-way:    59677
+Adjustment 04-way:    58268
+Adjustment 05-way:    57039
+Adjustment 06-way:    55913
+Adjustment 07-way:    55913
+Adjustment 08-way:    55913
+Adjustment 09-way:    55913
+Adjustment 10-way:    55913
+Adjustment 11-way:    55913
+Adjustment 12-way:    55913
+
+LPAR Number:          2
+LPAR Characteristics: Shared 
+LPAR Name:            LPAR02  
+LPAR Adjustment:      1000
+LPAR CPUs Total:      6
+LPAR CPUs Configured: 6
+LPAR CPUs Standby:    0
+LPAR CPUs Reserved:   0
+LPAR CPUs Dedicated:  6
+LPAR CPUs Shared:     0
+LPAR CPUs G-MTID:     0
+LPAR CPUs S-MTID:     1
+LPAR CPUs PS-MTID:    0
+
+VM00 Name:            pve1    
+VM00 Control Program: KVM/Linux       
+VM00 Adjustment:      1000
+VM00 CPUs Total:      2
+VM00 CPUs Configured: 2
+VM00 CPUs Standby:    0
+VM00 CPUs Reserved:   0
+VM00 Extended Name:   pve1
+VM00 UUID:            7c1f4a0e-2b9d-4f3a-9a51-0d6c8e2f1b33
+
+VM01 Name:            LINUX01 
+VM01 Control Program: z/VM    7.4.0   
+VM01 Adjustment:      125
+VM01 CPUs Total:      2
+VM01 CPUs Configured: 2
+VM01 CPUs Standby:    0
+VM01 CPUs Reserved:   0

@@ -1,0 +1,31 @@
+Manufacturer:         QEMU            
+Type:                 3906
+Model:                QEMU            
+Sequence Code:        QEMU            
+Plant:                QEMU
+
+CPUs Total:           2
+CPUs Configured:      2
+CPUs Standby:         0
+CPUs Reserved:        0
+Capability:           1144716329
+
+LPAR Number:          0
+LPAR Characteristics: Dedicated 
+LPAR Name:            QEMU    
+LPAR Adjustment:      1000
+LPAR CPUs Total:      2
+LPAR CPUs Configured: 2
+LPAR CPUs Standby:    0
+LPAR CPUs Reserved:   0
+LPAR CPUs Dedicated:  2
+LPAR CPUs Shared:     0
+
+VM00 Name:            tcg-gues
+VM00 Control Program: KVM/Linux       
+VM00 Adjustment:      1000
+VM00 CPUs Total:      2
+VM00 CPUs Configured: 2
+VM00 CPUs Standby:    0
+VM00 CPUs Reserved:   0
+VM00 Extended Name:   tcg-guest

@@ -15,6 +15,7 @@ PERLSOURCE = 			\
 	NodeConfig.pm		\
 	PullMetric.pm		\
 	Report.pm		\
+	S390xSysinfo.pm		\
 	VZDump.pm
 
 all: pvecfg.pm $(SUBDIRS)

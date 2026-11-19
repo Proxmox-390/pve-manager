@@ -37,6 +37,7 @@ use PVE::RESTHandler;
 use PVE::RPCEnvironment;
 use PVE::RRD;
 use PVE::Report;
+use PVE::S390xSysinfo;
 use PVE::SafeSyslog;
 use PVE::Storage;
 use PVE::Ticket;
@@ -514,6 +515,54 @@ __PACKAGE__->register_method({
                     },
                 },
             },
+            's390x-sysinfo' => {
+                description => "s390x only: the identity of the machine and the environment"
+                    . " the node runs in, from /proc/sysinfo.",
+                type => 'object',
+                optional => 1,
+                properties => {
+                    manufacturer => { type => 'string', optional => 1 },
+                    type => {
+                        description => "The machine type, for example '3907'.",
+                        type => 'string',
+                        optional => 1,
+                    },
+                    model => { type => 'string', optional => 1 },
+                    plant => { type => 'string', optional => 1 },
+                    'sequence-code' => {
+                        description => "The sequence code of the machine, as reported.",
+                        type => 'string',
+                        optional => 1,
+                    },
+                    serial => {
+                        description => "The serial number of the machine: the sequence code"
+                            . " without leading zeros.",
+                        type => 'string',
+                        optional => 1,
+                    },
+                    environment => {
+                        description => "Where the node runs: directly in a logical partition,"
+                            . " or as a guest of z/VM or KVM (the innermost hypervisor).",
+                        type => 'string',
+                        enum => [qw(lpar zvm kvm)],
+                        optional => 1,
+                    },
+                    'lpar-number' => { type => 'integer', optional => 1 },
+                    'lpar-name' => { type => 'string', optional => 1 },
+                    hypervisor => {
+                        description => "The control program of the innermost hypervisor,"
+                            . " for example 'z/VM 7.4.0' or 'KVM/Linux'.",
+                        type => 'string',
+                        optional => 1,
+                    },
+                    'guest-name' => {
+                        description => "The name of the node as a guest: the z/VM user ID,"
+                            . " or the name of the KVM guest.",
+                        type => 'string',
+                        optional => 1,
+                    },
+                },
+            },
             pveversion => {
                 type => 'string',
                 description => "The PVE version string.",
@@ -561,6 +610,11 @@ __PACKAGE__->register_method({
         $res->{'current-kernel'} = $current_kernel_info;
 
         $res->{'boot-info'} = get_boot_mode_info();
+
+        if (PVE::Tools::get_host_arch() eq 's390x') {
+            my $sysinfo = PVE::S390xSysinfo::read_sysinfo();
+            $res->{'s390x-sysinfo'} = $sysinfo if $sysinfo;
+        }
 
         $res->{cpuinfo} = PVE::ProcFSTools::read_cpuinfo();
 
