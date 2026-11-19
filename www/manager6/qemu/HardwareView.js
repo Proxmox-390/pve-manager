@@ -835,6 +835,8 @@ Ext.define('PVE.qemu.HardwareView', {
                 let linux = PVE.qemu.Architecture.isS390xLinux(ostype);
                 me.down('#addSerial').setHidden(!linux);
                 me.down('#addRng').setHidden(!linux);
+                // cloud-init is for Linux guests
+                me.down('#addCloudinitDrive').setHidden(!linux);
             }
 
             // s390x: only the VirtIO disks and network devices can be hot-plugged, the
