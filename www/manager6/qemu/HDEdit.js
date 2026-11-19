@@ -67,6 +67,12 @@ Ext.define('PVE.qemu.HDInputPanel', {
             'field[name=deviceid]': {
                 change: 'fireIdChange',
             },
+            // s390x: CKD volumes on network storage get a hint
+            'pveDiskStorageSelector field[name=hdstorage]': {
+                change: function (_field, value) {
+                    this.getView().dasdFields?.setStorage(value);
+                },
+            },
             'field[name=scsiController]': {
                 change: function (f, value) {
                     let vm = this.getViewModel();

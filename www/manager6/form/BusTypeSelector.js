@@ -23,7 +23,7 @@ Ext.define('PVE.form.BusTypeSelector', {
 
         // s390x only, see PVE.qemu.Architecture.allowedBusses
         me.comboItems.push(['fba', gettext('FBA DASD')]);
-        me.comboItems.push(['ckd', gettext('CKD DASD (3390)')]);
+        me.comboItems.push(['ckd', gettext('CKD DASD')]); // 3390 volumes, see the type
 
         if (me.withUnused) {
             me.comboItems.push(['unused', 'Unused']);

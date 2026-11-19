@@ -15,9 +15,24 @@ Ext.define('PVE.qemu.DASDFields', {
     nodename: undefined,
     vmid: undefined,
     autoSuggestDevno: true, // pre-fill the next free device number (not when editing a DASD)
+    slowStorage: false, // the volume is on network or shared storage, see setStorage()
 
     statics: {
         maxCylinders: 65520,
+
+        // Storage types whose volumes are reached over the network: CKD writes whole tracks, each
+        // small write of the guest becomes a track-sized one (write amplification), which is slow
+        // there. Shared storage of other types (e.g. LVM on a SAN) counts too.
+        networkStorageTypes: [
+            'rbd',
+            'cephfs',
+            'nfs',
+            'cifs',
+            'glusterfs',
+            'iscsi',
+            'iscsidirect',
+            'zfs', // ZFS over iSCSI
+        ],
 
         // the 3390 models and their cylinders; QEMU-mod emulates 3390 volumes only, up to the
         // 65520 cylinders of a 3390-54 (no extended address volumes, 3390-A)
@@ -99,8 +114,27 @@ Ext.define('PVE.qemu.DASDFields', {
             field.setDisabled(!ckdCreate);
         }
         me.down('field[name=ckdSize]').setVisible(kind === 'ckd' && !me.isCreate);
-        me.down('#ckdStorageHint').setVisible(kind === 'ckd');
+        me.updateStorageHint();
         me.updateCylinders();
+    },
+
+    // The storage of the volume (its ID): network or shared storage gets the write amplification
+    // hint for CKD volumes.
+    setStorage: function (storeid) {
+        let me = this;
+        let rec = storeid
+            ? PVE.data.ResourceStore.getById(`storage/${me.nodename}/${storeid}`)
+            : undefined;
+        me.slowStorage =
+            !!rec &&
+            (PVE.qemu.DASDFields.networkStorageTypes.includes(rec.data.plugintype) ||
+                !!rec.data.shared);
+        me.updateStorageHint();
+    },
+
+    updateStorageHint: function () {
+        let me = this;
+        me.down('#ckdStorageHint').setVisible(me.kind === 'ckd' && me.slowStorage);
     },
 
     // In the creation wizard, the VM ID comes from its general tab.
@@ -142,6 +176,7 @@ Ext.define('PVE.qemu.DASDFields', {
     setDrive: function (drive) {
         let me = this;
         me.down('pveCcwDevnoField').setValue(drive.devno);
+        me.setStorage(drive.file?.match(/^([^:]+):/)?.[1]);
         let size = PVE.qemu.DASDFields.renderCKDSize(drive.cylinders, drive.model);
         me.down('field[name=ckdSize]').setValue(me.kind === 'ckd' ? size : '');
     },
@@ -169,11 +204,14 @@ Ext.define('PVE.qemu.DASDFields', {
     initComponent: function () {
         let me = this;
 
-        let modelItems = PVE.qemu.DASDFields.ckdModels.map(([name, cylinders]) => [
-            name,
-            `${name} (${cylinders} ${gettext('cylinders')})`,
-        ]);
+        // the field shows the model only (its cylinders are shown below), the list both
+        let modelItems = PVE.qemu.DASDFields.ckdModels.map(([name]) => [name, name]);
         modelItems.push(['__custom__', gettext('Custom')]);
+        let modelListText = (key, value) => {
+            let entry = PVE.qemu.DASDFields.ckdModels.find(([name]) => name === key);
+            let text = entry ? `${value} (${entry[1]} ${gettext('cylinders')})` : value;
+            return Ext.htmlEncode(text);
+        };
 
         me.items = [
             {
@@ -191,6 +229,11 @@ Ext.define('PVE.qemu.DASDFields', {
                 value: '3390-9',
                 allowBlank: false,
                 comboItems: modelItems,
+                listConfig: {
+                    itemTpl: new Ext.XTemplate('{[this.text(values.key, values.value)]}', {
+                        text: modelListText,
+                    }),
+                },
                 listeners: {
                     change: () => me.updateCylinders(),
                 },
@@ -241,7 +284,7 @@ Ext.define('PVE.qemu.DASDFields', {
                 submitValue: false,
                 hidden: true,
                 value: gettext(
-                    'CKD volumes on network storage (Ceph RBD, NFS) are slow: the channel programs of the guest do synchronous I/O. Prefer local ZFS or LVM storage.',
+                    'CKD volumes are slow on network or shared storage: CKD writes whole tracks, so each small write of the guest becomes a track-sized write (CKD write amplification). Prefer local ZFS or LVM storage.',
                 ),
             },
         ];
