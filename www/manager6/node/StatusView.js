@@ -138,6 +138,52 @@ Ext.define('PVE.node.StatusView', {
             value: '',
         },
         {
+            // s390x only, shown when the node reports it
+            itemId: 's390xSerial',
+            colspan: 2,
+            hidden: true,
+            title: gettext('Serial Number'),
+            printBar: false,
+            textField: 's390x-sysinfo',
+            renderer: (sysinfo) =>
+                sysinfo?.serial ? Ext.htmlEncode(sysinfo.serial) : Proxmox.Utils.unknownText,
+            value: '',
+        },
+        {
+            itemId: 's390xEnvironment',
+            colspan: 2,
+            hidden: true,
+            title: gettext('Environment'),
+            printBar: false,
+            textField: 's390x-sysinfo',
+            renderer: (sysinfo) => {
+                if (!sysinfo) {
+                    return Proxmox.Utils.unknownText;
+                }
+                let lpar;
+                if (sysinfo['lpar-number'] !== undefined) {
+                    lpar = `LPAR: (${sysinfo['lpar-number']}) ${sysinfo['lpar-name'] ?? ''}`.trim();
+                }
+                let text;
+                if (sysinfo.environment === 'lpar') {
+                    return Ext.htmlEncode(lpar);
+                } else if (sysinfo.environment === 'zvm') {
+                    text = `VM: z/VM ${sysinfo['guest-name'] ?? ''}`.trim();
+                } else if (sysinfo.environment === 'kvm') {
+                    text = 'KVM';
+                } else {
+                    return Proxmox.Utils.unknownText;
+                }
+                text = Ext.htmlEncode(text);
+                if (lpar) {
+                    // the LPAR the hypervisor runs in
+                    text += ` <span style="opacity: 0.7">· ${Ext.htmlEncode(lpar)}</span>`;
+                }
+                return text;
+            },
+            value: '',
+        },
+        {
             itemId: 'version',
             colspan: 2,
             printBar: false,
@@ -146,6 +192,24 @@ Ext.define('PVE.node.StatusView', {
             value: '',
         },
     ],
+
+    updateValues: function (store, records, success) {
+        let me = this;
+
+        me.callParent(arguments);
+
+        // the serial number and environment rows are only shown for s390x nodes
+        if (success && !me.s390xRowsShown && me.getRecordValue('s390x-sysinfo')) {
+            me.s390xRowsShown = true;
+            Ext.suspendLayouts();
+            me.getComponent('s390xSerial').setVisible(true);
+            me.getComponent('s390xEnvironment').setVisible(true);
+            me.setHeight(me.getHeight() + me.s390xRowsHeight);
+            Ext.resumeLayouts(true);
+        }
+    },
+
+    s390xRowsHeight: 48,
 
     updateTitle: function () {
         var me = this;
