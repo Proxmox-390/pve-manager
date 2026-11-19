@@ -144,6 +144,23 @@ Ext.define('PVE.qemu.Architecture', {
         ];
     },
 
+    // The models of 3270 terminals (s390x), with their screen sizes. qemu-server emulates a
+    // model 2 for terminals without one.
+    terminalModels: [
+        ['2', gettext('Model 2 (24x80)')],
+        ['3', gettext('Model 3 (32x80)')],
+        ['4', gettext('Model 4 (43x80)')],
+        ['5', gettext('Model 5 (27x132)')],
+    ],
+
+    defaultTerminalModel: '2',
+
+    renderTerminalModel: function (model) {
+        model = model ?? PVE.qemu.Architecture.defaultTerminalModel;
+        let entry = PVE.qemu.Architecture.terminalModels.find(([key]) => key === model);
+        return entry ? entry[1] : `${gettext('Model')} ${model}`;
+    },
+
     // Split a CCW device number (0.<ssid>.<devno> or <devno>) into the subchannel set and the
     // 4-digit device number, both lower-case hex; [] if it is none.
     splitCcwDevno: function (devno) {

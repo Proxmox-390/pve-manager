@@ -419,11 +419,8 @@ Ext.define('PVE.qemu.HardwareView', {
                 header: gettext('3270 Terminal') + ' (' + confid + ')',
                 renderer: function (value) {
                     let terminal = PVE.Parser.parsePropertyString(value, 'devno');
-                    let text = terminal.devno ?? '';
-                    if (terminal.model) {
-                        text += `, ${gettext('Model')} 3279-${terminal.model}`;
-                    }
-                    return Ext.htmlEncode(text);
+                    let model = PVE.qemu.Architecture.renderTerminalModel(terminal.model);
+                    return Ext.htmlEncode(`${terminal.devno ?? ''}, ${model}`);
                 },
             };
         }

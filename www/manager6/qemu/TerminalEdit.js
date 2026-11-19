@@ -7,10 +7,7 @@ Ext.define('PVE.qemu.TerminalInputPanel', {
     onGetValues: function (values) {
         let me = this;
 
-        let terminal = { devno: values.devno };
-        if (values.model && values.model !== '__default__') {
-            terminal.model = values.model;
-        }
+        let terminal = { devno: values.devno, model: values.model };
         return { [me.confid]: PVE.Parser.printPropertyString(terminal, 'devno') };
     },
 
@@ -24,15 +21,10 @@ Ext.define('PVE.qemu.TerminalInputPanel', {
             xtype: 'proxmoxKVComboBox',
             name: 'model',
             fieldLabel: gettext('Model'),
-            value: '__default__',
+            value: PVE.qemu.Architecture.defaultTerminalModel,
+            allowBlank: false,
             deleteEmpty: false,
-            comboItems: [
-                ['__default__', gettext('Default') + ' (' + gettext('largest that fits') + ')'],
-                ['2', '3279-2 (24x80)'],
-                ['3', '3279-3 (32x80)'],
-                ['4', '3279-4 (43x80)'],
-                ['5', '3279-5 (27x132)'],
-            ],
+            comboItems: PVE.qemu.Architecture.terminalModels,
         },
     ],
 });
@@ -82,7 +74,7 @@ Ext.define('PVE.qemu.TerminalEdit', {
                     let terminal = PVE.Parser.parsePropertyString(data[me.confid], 'devno');
                     ipanel.setValues({
                         devno: terminal.devno,
-                        model: terminal.model ?? '__default__',
+                        model: terminal.model ?? PVE.qemu.Architecture.defaultTerminalModel,
                     });
                 }
                 ipanel.down('pveCcwDevnoField').setVMConfig(nodename, vmid);

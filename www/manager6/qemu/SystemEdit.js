@@ -33,18 +33,23 @@ Ext.define('PVE.qemu.SystemInputPanel', {
         delete values.preEnrolledKeys; // efidisk
         delete values.version; // tpmstate
 
-        // s390x: 3270 terminals at consecutive device numbers
+        // s390x: 3270 terminals of one model at consecutive device numbers; the model of each can
+        // be changed in the hardware view later
         let count = values.terminals ?? 0;
         let match = /^(?:0\.([0-3])\.)?([0-9a-f]{1,4})$/i.exec(values.terminaldevno ?? '');
         if (match) {
             let [, ssid = '0', first] = match;
             for (let i = 0; i < count; i++) {
                 let devno = (parseInt(first, 16) + i).toString(16).padStart(4, '0');
-                values[`terminal${i}`] = `0.${ssid}.${devno}`;
+                values[`terminal${i}`] = PVE.Parser.printPropertyString(
+                    { devno: `0.${ssid}.${devno}`, model: values.terminalmodel },
+                    'devno',
+                );
             }
         }
         delete values.terminals;
         delete values.terminaldevno;
+        delete values.terminalmodel;
 
         return values;
     },
@@ -165,6 +170,21 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             confid: /^terminal\d+$/,
             autoSuggest: false, // a new VM, the 3270 range starts there
             value: '0.0.0700',
+            hidden: true,
+            disabled: true,
+            bind: {
+                hidden: '{!isS390x}',
+                disabled: '{!isS390x}',
+            },
+        },
+        {
+            xtype: 'proxmoxKVComboBox',
+            name: 'terminalmodel',
+            fieldLabel: gettext('3270 Model'),
+            value: PVE.qemu.Architecture.defaultTerminalModel,
+            allowBlank: false,
+            deleteEmpty: false,
+            comboItems: PVE.qemu.Architecture.terminalModels,
             hidden: true,
             disabled: true,
             bind: {
