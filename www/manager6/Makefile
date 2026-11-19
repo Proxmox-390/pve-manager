@@ -290,6 +290,7 @@ JSSRC= 							\
 	qemu/RNGEdit.js					\
 	qemu/S390xConsole.js				\
 	qemu/SclpLineModeConsole.js			\
+	qemu/SclpSyslogEdit.js				\
 	qemu/S390xInstallMedia.js			\
 	qemu/SSHKey.js					\
 	qemu/ScsiHwEdit.js				\

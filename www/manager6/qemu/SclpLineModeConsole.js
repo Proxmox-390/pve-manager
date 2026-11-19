@@ -4,9 +4,11 @@
 // and an input line for operator commands (sclp-command). Neither needs this view: the log is
 // written and commands are accepted whether or not it is open.
 //
-// Clear only hides the lines shown so far in this browser, the log on the host stays complete;
-// Save downloads the whole log since the start of the VM. The view follows new lines, unless it
-// was scrolled up.
+// The log is kept in files: the current one and older generations (rotated at 64 MiB and at every
+// start of the VM, all files of a VM within 512 MiB). The file selector shows an older one; Save
+// downloads the file shown, or the whole history (all files, oldest first, as one text file).
+// Clear only hides the lines shown so far in this browser, the log on the host stays complete.
+// The view follows new lines, unless it was scrolled up.
 Ext.define('PVE.qemu.SclpLineModeConsole', {
     extend: 'Ext.panel.Panel',
     alias: 'widget.pveQemuSclpLineModeConsole',
@@ -27,6 +29,9 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
     // view state: the log being shown (id), the byte offset after the text shown (end), the offset
     // the view starts at (start, after Clear), the text shown and the search matches
     logId: undefined,
+    // the file shown: 0 is the current one, n the generation <log>.n
+    generation: 0,
+    files: [],
     logEnd: 0,
     viewStart: 0,
     text: '',
@@ -63,6 +68,23 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
 
         me.tbar = [
             {
+                xtype: 'combobox',
+                itemId: 'fileSel',
+                width: 260,
+                editable: false,
+                queryMode: 'local',
+                displayField: 'text',
+                valueField: 'generation',
+                value: 0,
+                store: {
+                    fields: ['generation', 'text'],
+                    data: [{ generation: 0, text: gettext('Current log') }],
+                },
+                listeners: {
+                    select: (_cb, rec) => me.selectGeneration(rec.get('generation')),
+                },
+            },
+            {
                 text: gettext('Clear'),
                 iconCls: 'fa fa-eraser',
                 tooltip: gettext('Hide the lines shown so far. The log on the host is kept.'),
@@ -78,9 +100,26 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
             },
             {
                 text: gettext('Save'),
+                itemId: 'save',
                 iconCls: 'fa fa-download',
-                tooltip: gettext('Download the whole log since the start of the VM'),
-                handler: () => me.saveLog(),
+                menu: [
+                    {
+                        text: gettext('File shown'),
+                        itemId: 'saveFile',
+                        iconCls: 'fa fa-file-text-o',
+                        handler: () => me.saveLog([me.generation]),
+                    },
+                    {
+                        text: gettext('Whole history (all files, oldest first)'),
+                        itemId: 'saveAll',
+                        iconCls: 'fa fa-files-o',
+                        handler: () =>
+                            me.saveLog(
+                                me.files.map((f) => f.generation).sort((a, b) => b - a),
+                                'all',
+                            ),
+                    },
+                ],
             },
             '-',
             {
@@ -128,7 +167,9 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
                 itemId: 'scrollEnd',
                 text: gettext('Scroll to end'),
                 iconCls: 'fa fa-angle-double-down',
-                hidden: true,
+                tooltip: gettext('Follow new lines again'),
+                // disabled, not hidden: a layout would restore the scroll position of the view
+                disabled: true,
                 handler: () => me.scrollToEnd(),
             },
         ];
@@ -224,6 +265,8 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
         let me = this;
 
         me.connected = false;
+        // a response still on its way is for the previous view
+        me.pollSeq = (me.pollSeq ?? 0) + 1;
         if (me.pollTimer) {
             clearTimeout(me.pollTimer);
             me.pollTimer = undefined;
@@ -257,13 +300,24 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
             return;
         }
         me.polling = true;
+        let seq = me.pollSeq;
+        // a response for a previous view (another file, or the tab was hidden): poll again
+        let stale = function () {
+            if (seq === me.pollSeq) {
+                return false;
+            }
+            if (me.connected) {
+                me.schedulePoll(0);
+            }
+            return true;
+        };
         Proxmox.Utils.API2Request({
             url: me.logUrl(),
             method: 'GET',
-            params: { start: me.logEnd, limit: me.chunkSize },
+            params: { start: me.logEnd, limit: me.chunkSize, generation: me.generation },
             failure: function (response) {
                 me.polling = false;
-                if (me.destroyed) {
+                if (me.destroyed || stale()) {
                     return;
                 }
                 me.setStatus(response.htmlStatus ?? gettext('Error'), true);
@@ -271,10 +325,11 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
             },
             success: function ({ result: { data } }) {
                 me.polling = false;
-                if (me.destroyed) {
+                if (me.destroyed || stale()) {
                     return;
                 }
                 me.setStatus('');
+                me.updateFiles(data.files ?? []);
                 if (data.id !== me.logId) {
                     // a new log (the VM was started again): begin anew
                     me.logId = data.id;
@@ -384,13 +439,13 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
     scrollToEnd: function () {
         let me = this;
 
-        let el = me.paperEl()?.dom;
-        if (!el) {
+        let paper = me.down('#paper');
+        if (!paper.rendered) {
             return;
         }
-        el.scrollTop = el.scrollHeight;
         me.follow = true;
-        me.down('#scrollEnd').setHidden(true);
+        me.down('#scrollEnd').setDisabled(true);
+        paper.getScrollable().scrollTo(null, Infinity);
     },
 
     // follow new lines while the view is at its end, pause when it was scrolled up
@@ -399,7 +454,7 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
 
         let el = me.paperEl().dom;
         me.follow = el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
-        me.down('#scrollEnd').setHidden(me.follow);
+        me.down('#scrollEnd').setDisabled(me.follow);
     },
 
     updateSearch: function () {
@@ -476,37 +531,92 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
         me.reconnect();
     },
 
-    // download the whole log since the start of the VM, read in chunks
-    saveLog: function () {
+    // the files of the log, for the file selector: the current one and the older generations
+    updateFiles: function (files) {
+        let me = this;
+
+        let key = JSON.stringify(files.map((f) => [f.generation, f.size, f.mtime]));
+        if (key === me.filesKey) {
+            return;
+        }
+        me.filesKey = key;
+        me.files = files;
+        let items = files.map((f) => {
+            let size = Proxmox.Utils.format_size(f.size);
+            if (!f.generation) {
+                return { generation: 0, text: `${gettext('Current log')} (${size})` };
+            }
+            let date = Ext.Date.format(new Date(f.mtime * 1000), 'Y-m-d H:i');
+            return { generation: f.generation, text: `${f.name} (${size}, ${date})` };
+        });
+        if (!items.length) {
+            items = [{ generation: 0, text: gettext('Current log') }];
+        }
+        let combo = me.down('#fileSel');
+        combo.getStore().setData(items);
+        if (!items.some((i) => i.generation === me.generation)) {
+            // the file shown was removed (the oldest generations go)
+            me.selectGeneration(0);
+        }
+        combo.setValue(me.generation);
+    },
+
+    selectGeneration: function (generation) {
+        let me = this;
+
+        if (generation === me.generation && me.logId !== undefined) {
+            return;
+        }
+        me.generation = generation;
+        me.down('#fileSel').setValue(generation);
+        me.logId = undefined;
+        me.logEnd = 0;
+        me.text = '';
+        me.renderText();
+        me.reconnect();
+    },
+
+    // download log files as one text file, read in chunks; generations in the order given
+    saveLog: function (generations, suffix) {
         let me = this;
 
         let parts = [];
-        let fetchChunk = function (start) {
+        let fetchChunk = function (index, start) {
+            if (index >= generations.length) {
+                let blob = new Blob(parts, { type: 'text/plain;charset=utf-8' });
+                let stamp = Ext.Date.format(new Date(), 'Ymd-His');
+                let name = `vm${me.vmid}-sclp-line-mode-${stamp}`;
+                if (suffix) {
+                    name += `-${suffix}`;
+                } else if (generations[0]) {
+                    name += `.${generations[0]}`;
+                }
+                let link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `${name}.txt`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+                return;
+            }
             Proxmox.Utils.API2Request({
                 url: me.logUrl(),
                 method: 'GET',
-                params: { start, limit: me.chunkSize },
+                params: { start, limit: me.chunkSize, generation: generations[index] },
                 waitMsgTarget: me,
                 failure: (response) => Ext.Msg.alert(gettext('Error'), response.htmlStatus),
                 success: function ({ result: { data } }) {
                     parts.push(data.data);
                     if (!data.complete && data.end > start) {
-                        fetchChunk(data.end);
-                        return;
+                        fetchChunk(index, data.end);
+                    } else {
+                        fetchChunk(index + 1, 0);
                     }
-                    let blob = new Blob(parts, { type: 'text/plain;charset=utf-8' });
-                    let stamp = Ext.Date.format(new Date(), 'Ymd-His');
-                    let link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    link.download = `vm${me.vmid}-sclp-line-mode-${stamp}.txt`;
-                    document.body.appendChild(link);
-                    link.click();
-                    link.remove();
-                    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
                 },
             });
         };
-        fetchChunk(0);
+        fetchChunk(0, 0);
     },
 
     browseHistory: function (step) {

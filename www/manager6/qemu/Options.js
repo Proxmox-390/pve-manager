@@ -167,6 +167,26 @@ Ext.define('PVE.qemu.Options', {
                     return text;
                 },
             },
+            // forwarding of the line-mode console (mainframe operating systems, see below)
+            'sclplm-syslog': {
+                header: gettext('Line-mode console syslog'),
+                required: true,
+                visible: false,
+                editor: caps.vms['VM.Config.Options'] ? 'PVE.qemu.SclpSyslogEdit' : undefined,
+                renderer: function (value) {
+                    if (!value) {
+                        return Proxmox.Utils.NoneText;
+                    }
+                    let syslog = PVE.Parser.parsePropertyString(value, 'host');
+                    let host = Ext.htmlEncode(syslog.host ?? '');
+                    if (host.includes(':')) {
+                        host = `[${host}]`;
+                    }
+                    let proto = (syslog.proto ?? 'udp').toUpperCase();
+                    let facility = Ext.htmlEncode(syslog.facility ?? 'local0');
+                    return `${proto} ${host}:${syslog.port ?? 514} (${facility})`;
+                },
+            },
             tablet: {
                 header: gettext('Use tablet for pointer'),
                 defaultValue: true,
@@ -503,12 +523,15 @@ Ext.define('PVE.qemu.Options', {
         });
 
         if (s390x) {
-            // the (pending) OS type decides whether the boot order is shown, next to the IPL
+            // the (pending) OS type decides whether the boot order is shown, next to the IPL, or the
+            // syslog forwarding of the line-mode console
             me.mon(me.rstore, 'load', function () {
                 let ostype = me.getObjectValue('ostype', undefined, true);
                 let boot = PVE.qemu.Architecture.isS390xLinux(ostype);
-                if (rows.boot.visible !== boot) {
+                // only the mainframe operating systems have the line-mode console
+                if (rows.boot.visible !== boot || rows['sclplm-syslog'].visible !== !boot) {
                     rows.boot.visible = boot;
+                    rows['sclplm-syslog'].visible = !boot;
                     // apply the row filter again (store.filter() without a filter does not)
                     let filters = me.getStore().getFilters();
                     let rowFilters = filters.getRange();
