@@ -91,7 +91,7 @@ Ext.define('PVE.qemu.S390xConsole', {
             'unload-prompt': 0,
         };
         if (model) {
-            // xterm.js keeps the terminal at least at the size of the 3270 screen
+            // xterm.js shows the 3270 session at its fixed size, centred or with scroll bars
             query.model = model;
         }
         return '/?' + Ext.Object.toQueryString(query);

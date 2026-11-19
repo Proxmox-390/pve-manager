@@ -39,7 +39,7 @@ Ext.define('PVE.button.ConsoleButton', {
     // Offer the given serial terminals of a VM, each opened with xterm.js, instead of the
     // viewers; the first one is the default. Used for s390x VMs, which have SCLP and 3270
     // consoles instead of a VGA display.
-    // consoles: [{ serial: <serial terminal interface>, text: <menu entry> }]
+    // consoles: [{ serial: <serial terminal interface>, text: <menu entry>, model: <3270 model> }]
     setSerialConsoles: function (consoles) {
         let me = this;
 
@@ -48,11 +48,11 @@ Ext.define('PVE.button.ConsoleButton', {
         menu.query('menuitem[serial]').forEach((item) => menu.remove(item));
         ['#novnc', '#spicemenu', '#xtermjs'].forEach((id) => me.down(id).setHidden(true));
         menu.add(
-            consoles.map(({ serial, text }) => ({
+            consoles.map(({ serial, text, model }) => ({
                 text,
                 serial,
                 iconCls: 'pve-itype-icon-xtermjs',
-                handler: () => me.openConsole('xtermjs', serial),
+                handler: () => me.openConsole('xtermjs', serial, model),
             })),
         );
     },
@@ -61,7 +61,8 @@ Ext.define('PVE.button.ConsoleButton', {
         // main, general, handler
         let me = this;
         if (me.serialConsoles) {
-            me.openConsole('xtermjs', me.serialConsoles[0].serial);
+            let { serial, model } = me.serialConsoles[0];
+            me.openConsole('xtermjs', serial, model);
             return;
         }
         PVE.Utils.openDefaultConsoleWindow(
@@ -77,7 +78,7 @@ Ext.define('PVE.button.ConsoleButton', {
         );
     },
 
-    openConsole: function (types, serial) {
+    openConsole: function (types, serial, model) {
         // used by split-menu buttons
         let me = this;
         PVE.Utils.openConsoleWindow(
@@ -88,6 +89,7 @@ Ext.define('PVE.button.ConsoleButton', {
             me.consoleName,
             me.cmd,
             serial,
+            model,
         );
     },
 

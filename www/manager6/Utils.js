@@ -1502,8 +1502,18 @@ Ext.define('PVE.Utils', {
             PVE.Utils.openConsoleWindow(dv, consoleType, vmid, nodename, vmname, cmd);
         },
 
-        // serial: the VM serial terminal interface to open with xterm.js, the default if unset
-        openConsoleWindow: function (viewer, consoleType, vmid, nodename, vmname, cmd, serial) {
+        // serial: the VM serial terminal interface to open with xterm.js, the default if unset,
+        // model: the 3270 model of a 3270 console or terminal of an s390x VM
+        openConsoleWindow: function (
+            viewer,
+            consoleType,
+            vmid,
+            nodename,
+            vmname,
+            cmd,
+            serial,
+            model,
+        ) {
             if (vmid === undefined && (consoleType === 'kvm' || consoleType === 'lxc')) {
                 throw 'missing vmid';
             }
@@ -1514,7 +1524,15 @@ Ext.define('PVE.Utils', {
             if (viewer === 'html5') {
                 PVE.Utils.openVNCViewer(consoleType, vmid, nodename, vmname, cmd);
             } else if (viewer === 'xtermjs') {
-                Proxmox.Utils.openXtermJsViewer(consoleType, vmid, nodename, vmname, cmd, serial);
+                Proxmox.Utils.openXtermJsViewer(
+                    consoleType,
+                    vmid,
+                    nodename,
+                    vmname,
+                    cmd,
+                    serial,
+                    model,
+                );
             } else if (viewer === 'vv') {
                 let url = '/nodes/' + nodename + '/spiceshell';
                 let params = {
@@ -1543,7 +1561,7 @@ Ext.define('PVE.Utils', {
                 url: `/nodes/${nodename}/qemu/${vmid}/config`,
                 failure: (response) => Ext.Msg.alert('Error', response.htmlStatus),
                 success: function ({ result: { data } }) {
-                    let serial = PVE.qemu.Architecture.getS390xConsoles(data)[0].serial;
+                    let { serial, model } = PVE.qemu.Architecture.getS390xConsoles(data)[0];
                     PVE.Utils.openConsoleWindow(
                         'xtermjs',
                         'kvm',
@@ -1552,6 +1570,7 @@ Ext.define('PVE.Utils', {
                         vmname,
                         undefined,
                         serial,
+                        model,
                     );
                 },
             });
