@@ -320,6 +320,8 @@ Ext.define('PVE.qemu.HardwareView', {
                 editor: caps.vms['VM.Config.Network'] ? 'PVE.qemu.NetworkEdit' : undefined,
                 never_delete: !caps.vms['VM.Config.Network'],
                 header: gettext('Network Device') + ' (' + confid + ')',
+                // s390x: qeth adapters address first, like the other CCW devices
+                renderer: isS390x ? PVE.qemu.Architecture.renderS390xNetwork : undefined,
             };
         }
         rows.efidisk0 = {
@@ -386,7 +388,7 @@ Ext.define('PVE.qemu.HardwareView', {
                 editor: cdromCap ? 'PVE.qemu.TapeEdit' : undefined,
                 never_delete: !cdromCap,
                 header: gettext('Tape Drive') + ` (${confid})`,
-                renderer: PVE.qemu.S390xMedia.renderTape,
+                renderer: (value) => PVE.qemu.S390xMedia.renderTape(value, confid),
             };
         }
         rows.netboot = {
@@ -418,11 +420,7 @@ Ext.define('PVE.qemu.HardwareView', {
                 editor: caps.vms['VM.Config.HWType'] ? 'PVE.qemu.TerminalEdit' : undefined,
                 never_delete: !caps.vms['VM.Config.HWType'],
                 header: gettext('3270 Terminal') + ' (' + confid + ')',
-                renderer: function (value) {
-                    let terminal = PVE.Parser.parsePropertyString(value, 'devno');
-                    let model = PVE.qemu.Architecture.renderTerminalModel(terminal.model);
-                    return Ext.htmlEncode(`${terminal.devno ?? ''}, ${model}`);
-                },
+                renderer: PVE.qemu.Architecture.renderTerminal,
             };
         }
         rows.audio0 = {

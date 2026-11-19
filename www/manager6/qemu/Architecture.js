@@ -161,6 +161,32 @@ Ext.define('PVE.qemu.Architecture', {
         return entry ? entry[1] : `${gettext('Model')} ${model}`;
     },
 
+    // "0.0.0700, Model 2 (24x80)": the address and model of a 3270 terminal config entry
+    renderTerminal: function (value) {
+        let terminal = PVE.Parser.parsePropertyString(value ?? '', 'devno');
+        let model = PVE.qemu.Architecture.renderTerminalModel(terminal.model);
+        return Ext.htmlEncode(`${terminal.devno ?? ''}, ${model}`);
+    },
+
+    // A network device config entry of an s390x VM. qeth adapters like the other CCW devices:
+    // "0.0.0400-0.0.0402, qeth, bridge=vmbr0, MAC BC:24:11:C3:30:E4, firewall=1", the address
+    // (the read, write and data devices) first; other models (VirtIO) as they are.
+    renderS390xNetwork: function (value) {
+        let parts = (value ?? '').split(',').filter((part) => !!part);
+        let model = parts[0]?.match(/^qeth(?:=(\S+))?$/i);
+        if (!model) {
+            return Ext.htmlEncode(value ?? '');
+        }
+        let devno = parts.find((part) => part.startsWith('devno='))?.slice(6);
+        let rest = parts.slice(1).filter((part) => !part.startsWith('devno='));
+        let bridge = rest.filter((part) => part.startsWith('bridge='));
+        let others = rest.filter((part) => !part.startsWith('bridge='));
+        let devnos = PVE.form.CcwDevnoField.expand(devno, 3);
+        let address = devnos.length === 3 ? `${devnos[0]}-${devnos[2]}` : gettext('no address');
+        let mac = model[1] ? [`MAC ${model[1]}`] : [];
+        return Ext.htmlEncode([address, 'qeth', ...bridge, ...mac, ...others].join(', '));
+    },
+
     // Split a CCW device number (0.<ssid>.<devno> or <devno>) into the subchannel set and the
     // 4-digit device number, both lower-case hex; [] if it is none.
     splitCcwDevno: function (devno) {

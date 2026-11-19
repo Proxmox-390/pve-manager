@@ -33,16 +33,18 @@ Ext.define('PVE.qemu.S390xMedia', {
         return `0.0.${(0x580 + index).toString(16).padStart(4, '0')}`;
     },
 
-    renderTape: function (value) {
+    // "0.0.0580, 3590, local:iso/SYSTEM.AWS": address first, then the drive type and the medium,
+    // like the DASDs and 3270 terminals. Media still to import (guest import) show their file name.
+    // 'key' (tapeN) gives the address of a drive without one.
+    renderTape: function (value, key) {
         let tape = PVE.Parser.parsePropertyString(value ?? '', 'file');
-        let text = tape.file === 'none' ? gettext('empty') : tape.file;
-        if (tape.devno) {
-            text += `, devno=${tape.devno}`;
+        let medium = tape.file === 'none' ? gettext('empty') : tape.file;
+        if (tape['import-from']) {
+            medium = tape['import-from'].replace(/^.*\//, '');
         }
-        if (tape.ident) {
-            text += `, ident=${tape.ident}`;
-        }
-        return Ext.htmlEncode(text);
+        let devno = tape.devno ?? (key ? PVE.qemu.S390xMedia.defaultTapeDevno(key) : undefined);
+        let ident = tape.ident ?? '3590'; // qemu-mod's default drive type
+        return Ext.htmlEncode([devno, ident, medium].filter((part) => !!part).join(', '));
     },
 
     renderNetboot: function (value) {
