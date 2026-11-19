@@ -145,8 +145,14 @@ Ext.define('PVE.node.StatusView', {
             title: gettext('Serial Number'),
             printBar: false,
             textField: 's390x-sysinfo',
-            renderer: (sysinfo) =>
-                sysinfo?.serial ? Ext.htmlEncode(sysinfo.serial) : Proxmox.Utils.unknownText,
+            // plant-serial, as on the label of the machine (e.g. 02-12345)
+            renderer: (sysinfo) => {
+                if (!sysinfo?.serial) {
+                    return Proxmox.Utils.unknownText;
+                }
+                let plant = (sysinfo.plant ?? '').trim();
+                return Ext.htmlEncode(plant ? `${plant}-${sysinfo.serial}` : sysinfo.serial);
+            },
             value: '',
         },
         {
