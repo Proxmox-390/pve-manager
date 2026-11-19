@@ -493,6 +493,9 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
         {
             xtype: 'proxmoxtextfield',
             name: 'netbooturl',
+            // the fields of a medium line up: labels right-aligned, like the ISO selectors
+            labelWidth: 120,
+            labelAlign: 'right',
             fieldLabel: gettext('URL'),
             emptyText: 'https://…/generic.ins',
             regex: PVE.qemu.S390xMedia.urlRegex,
@@ -506,6 +509,8 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
         {
             xtype: 'pveStorageSelector',
             name: 'netbootstorage',
+            labelWidth: 120,
+            labelAlign: 'right',
             fieldLabel: gettext('Store files on'),
             storageContent: 'snippets',
             autoSelect: true,
@@ -526,6 +531,8 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
         {
             xtype: 'pveIsoSelector',
             name: 'tapeimage',
+            labelWidth: 120,
+            labelAlign: 'right',
             insideWizard: true,
             fileFilter: (rec) => PVE.qemu.S390xMedia.isTapeImage(rec.data.volid),
             fileLabel: gettext('Tape image'),
@@ -538,6 +545,8 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
         {
             xtype: 'pveCcwDevnoField',
             name: 'tapedevno',
+            labelWidth: 120,
+            labelAlign: 'right',
             kind: 'tape',
             confid: 'tape0',
             autoSuggest: false, // a new VM, the tape range starts there
@@ -560,6 +569,8 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
         {
             xtype: 'pveIsoSelector',
             name: 'cdimage',
+            labelWidth: 120,
+            labelAlign: 'right',
             insideWizard: true,
             fileFilter: (rec) => !PVE.qemu.S390xMedia.isTapeImage(rec.data.volid),
             bind: {
