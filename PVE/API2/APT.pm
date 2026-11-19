@@ -1000,6 +1000,12 @@ __PACKAGE__->register_method({
             vncterm
         );
 
+        # s390x: qemu-server does not depend on swtpm there (no TPM), listed only if installed
+        if (PVE::S390xPort::is_s390x()) {
+            @pkgs = grep { $_ ne 'swtpm' } @pkgs;
+            push @opt_pack, 'swtpm';
+        }
+
         # add the rest ordered by name, easier to find for humans
         push @list, (sort @pkgs, @opt_pack);
 
