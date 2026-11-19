@@ -9,6 +9,8 @@ Ext.define('PVE.qemu.MachineInputPanel', {
         },
         formulas: {
             q35: (get) => get('type') === 'q35',
+            // s390x VMs have no vIOMMU (no PCI)
+            i440fxViommu: (get) => get('type') !== 'q35' && get('arch') !== 's390x',
         },
     },
 
@@ -52,13 +54,22 @@ Ext.define('PVE.qemu.MachineInputPanel', {
                 defaultMachine = 'i440fx'; // the default in the backend is 'pc' which means 'i440fx' for the qemu machinetype
             }
             let type = machineType === 'q35' ? 'q35' : defaultMachine;
+            let mainframe = false;
             if (arch === 's390x' && machineType && machineType !== '__default__') {
-                // the versions of the virtio machine, unversioned machine types have none
+                // the versions of the virtio machine, or of a mainframe machine type (czam-v1 of
+                // czam), unversioned machine types have none
                 type = machineType;
+                mainframe = machineType !== defaultMachine;
             }
             let store = me.lookup('version').getStore();
             store.clearFilter();
-            store.addFilter((val) => val.data.id === 'latest' || val.data.type === type);
+            store.addFilter(
+                mainframe
+                    ? (val) =>
+                          val.data.id === 'latest' ||
+                          (val.data.class === 'mainframe' && val.data.id.startsWith(`${type}-`))
+                    : (val) => val.data.id === 'latest' || val.data.type === type,
+            );
             store.isWindows = me.getView().isWindows;
         },
 
@@ -109,11 +120,19 @@ Ext.define('PVE.qemu.MachineInputPanel', {
             }
             values.viommu = '__default__';
             values.machine = machine;
+            // a pinned version of the virtio machine or of a mainframe machine type (czam-v1:
+            // czam, version czam-v1)
+            let mainframeVersion = machine.match(/^(.+)-v\d+$/);
             if (machine.startsWith(`${defaultMachine}-`)) {
                 values.version = machine;
                 values.machine = defaultMachine;
                 me.setAdvancedVisible(true);
+            } else if (mainframeVersion) {
+                values.version = machine;
+                values.machine = mainframeVersion[1];
+                me.setAdvancedVisible(true);
             }
+            me.getViewModel().set('arch', values.arch);
             // The s390x machine list loads asynchronously: the selector keeps a value until then,
             // but the binding of its value to 'type' would set the initial one again later.
             me.getViewModel().set('type', values.machine);
@@ -190,13 +209,20 @@ Ext.define('PVE.qemu.MachineInputPanel', {
             queryParam: false,
             store: {
                 autoLoad: true,
-                fields: ['id', 'type', 'version'],
+                fields: ['id', 'type', 'version', 'class'],
                 proxy: {
                     type: 'proxmox',
                     url: '/api2/json/nodes/localhost/capabilities/qemu/machines',
                 },
                 listeners: {
-                    load: function (records) {
+                    load: function (store, records) {
+                        // s390x: versions of mainframe machine types by their name (czam-v1),
+                        // not the QEMU version
+                        (records ?? []).forEach((rec) => {
+                            if (rec.data.class === 'mainframe') {
+                                rec.set('version', rec.data.id, { silent: true, commit: true });
+                            }
+                        });
                         if (!this.isWindows) {
                             this.insert(0, {
                                 id: 'latest',
@@ -262,8 +288,8 @@ Ext.define('PVE.qemu.MachineInputPanel', {
                 ['virtio', 'VirtIO'],
             ],
             bind: {
-                hidden: '{q35}',
-                disabled: '{q35}',
+                hidden: '{!i440fxViommu}',
+                disabled: '{!i440fxViommu}',
             },
         },
     ],
