@@ -692,7 +692,13 @@ Ext.define('PVE.qemu.HardwareView', {
             text: gettext('Disk Action'),
             disabled: true,
             menu: {
-                items: [move_menuitem, reassign_menuitem, resize_menuitem, efiEnrollMenuItem],
+                // s390x VMs have no EFI disk
+                items: [
+                    move_menuitem,
+                    reassign_menuitem,
+                    resize_menuitem,
+                    ...(isS390x ? [] : [efiEnrollMenuItem]),
+                ],
             },
         });
 
