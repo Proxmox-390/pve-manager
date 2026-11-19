@@ -100,6 +100,12 @@ Ext.define('PVE.window.ExportOva', {
                 fieldLabel: gettext('Loaded media'),
                 hidden: true,
             },
+            {
+                xtype: 'displayfield',
+                itemId: 'pendingHint',
+                userCls: 'pmx-hint',
+                hidden: true,
+            },
         ];
 
         me.callParent();
@@ -116,5 +122,43 @@ Ext.define('PVE.window.ExportOva', {
                 }
             },
         });
+
+        // the OVA has the current configuration, without the pending changes
+        Proxmox.Utils.API2Request({
+            url: `/nodes/${me.nodename}/qemu/${me.vmid}/pending`,
+            method: 'GET',
+            failure: () => {
+                // the export task warns about pending changes too
+            },
+            success: ({ result: { data } }) => {
+                if (me.isDestroyed) {
+                    return;
+                }
+                me.showPending(data ?? []);
+            },
+        });
+    },
+
+    showPending: function (entries) {
+        let me = this;
+        let keys = entries
+            .filter((entry) => entry.pending !== undefined || entry.delete)
+            .map((entry) => entry.key)
+            .sort();
+        if (!keys.length) {
+            return;
+        }
+        let field = me.down('#pendingHint');
+        field.setValue(
+            Ext.htmlEncode(
+                Ext.String.format(
+                    gettext(
+                        'Pending changes are not part of the OVA, it gets the current configuration. Pending: {0} (applied at the next start of the VM).',
+                    ),
+                    keys.join(', '),
+                ),
+            ),
+        );
+        field.setHidden(false);
     },
 });
