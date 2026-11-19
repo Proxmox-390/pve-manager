@@ -17,7 +17,6 @@ Ext.define('PVE.qemu.DASDFields', {
     autoSuggestDevno: true, // pre-fill the next free device number (not when editing a DASD)
 
     statics: {
-        cylinderSize: 852480, // 15 tracks of 56832 bytes
         maxCylinders: 65520,
 
         // the 3390 models and their cylinders; QEMU-mod emulates 3390 volumes only, up to the

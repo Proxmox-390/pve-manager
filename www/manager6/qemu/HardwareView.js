@@ -907,7 +907,10 @@ Ext.define('PVE.qemu.HardwareView', {
                 pending || !diskCap || isCloudInit || !(isDisk || isEfi || tpmMoveable),
             );
             reassign_menuitem.setDisabled(pending || isEfi || tpmMoveable);
-            resize_menuitem.setDisabled(pending || !isUsedDisk);
+            // the guest formats a CKD volume for its geometry, it cannot grow (s390x)
+            const isCKD = !!key.match(/^ckd\d+$/);
+            resize_menuitem.setDisabled(pending || !isUsedDisk || isCKD);
+            resize_menuitem.setTooltip(isCKD ? gettext('CKD volumes cannot be resized') : '');
 
             revert_btn.setDisabled(!pending);
         };

@@ -6,10 +6,6 @@ Ext.define('PVE.window.HDResize', {
     resize_disk: function (disk, size) {
         var me = this;
         var params = { disk: disk, size: '+' + size + 'G' };
-        if (me.isCKD) {
-            // a CKD volume grows by whole cylinders, the size is given in bytes
-            params.size = '+' + size * PVE.qemu.DASDFields.cylinderSize;
-        }
 
         Proxmox.Utils.API2Request({
             params: params,
@@ -51,8 +47,6 @@ Ext.define('PVE.window.HDResize', {
             },
         ];
 
-        me.isCKD = !!me.disk.match(/^ckd\d+$/);
-
         me.hdsizesel = Ext.createWidget('numberfield', {
             name: 'size',
             minValue: 0,
@@ -62,17 +56,6 @@ Ext.define('PVE.window.HDResize', {
             fieldLabel: `${gettext('Size Increment')} (${gettext('GiB')})`,
             allowBlank: false,
         });
-        if (me.isCKD) {
-            // the VM must not run, the volume header gets the new cylinder count
-            me.hdsizesel = Ext.createWidget('proxmoxintegerfield', {
-                name: 'size',
-                minValue: 1,
-                maxValue: PVE.qemu.DASDFields.maxCylinders,
-                value: 1,
-                fieldLabel: gettext('Cylinders to add'),
-                allowBlank: false,
-            });
-        }
 
         items.push(me.hdsizesel);
 
