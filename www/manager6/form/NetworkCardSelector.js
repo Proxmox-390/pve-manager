@@ -9,18 +9,19 @@ Ext.define('PVE.form.NetworkCardSelector', {
         ['vmxnet3', 'VMware vmxnet3'],
     ],
 
-    // On s390x, there are qeth adapters (OSA-Express) for all operating systems and VirtIO for
-    // Linux guests only. 'configured' is the model of an existing NIC, which is kept selectable.
-    setArchitecture: function (arch, ostype, configured) {
+    // On s390x, there are qeth adapters (OSA-Express) and VirtIO, on both machine classes; the
+    // OS type only picks the default. 'configured' is the model of an existing NIC, which is kept
+    // selectable.
+    setArchitecture: function (arch, configured) {
         let me = this;
 
         let items =
             me.initialConfig.comboItems ?? PVE.form.NetworkCardSelector.prototype.comboItems;
         if (arch === 's390x') {
-            items = [['qeth', 'qeth (OSA-Express)']];
-            if (PVE.qemu.Architecture.isS390xLinux(ostype)) {
-                items.push(['virtio', 'VirtIO (' + gettext('paravirtualized') + ')']);
-            }
+            items = [
+                ['qeth', 'qeth (OSA-Express)'],
+                ['virtio', 'VirtIO (' + gettext('paravirtualized') + ')'],
+            ];
             if (configured && !items.find(([key]) => key === configured)) {
                 items.push([configured, configured]);
             }

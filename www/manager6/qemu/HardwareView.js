@@ -830,12 +830,9 @@ Ext.define('PVE.qemu.HardwareView', {
                 me.down('#addNetboot').setDisabled(
                     noVMConfigCDROMPerm || !!me.getObjectValue('netboot', undefined, true),
                 );
-                // the virtio consoles and the virtio RNG need Linux drivers
+                // cloud-init is for Linux guests
                 let ostype = me.getObjectValue('ostype', undefined, true);
                 let linux = PVE.qemu.Architecture.isS390xLinux(ostype);
-                me.down('#addSerial').setHidden(!linux);
-                me.down('#addRng').setHidden(!linux);
-                // cloud-init is for Linux guests
                 me.down('#addCloudinitDrive').setHidden(!linux);
             }
 

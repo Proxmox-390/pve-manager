@@ -39,7 +39,7 @@ Ext.define('PVE.window.GuestImport', {
             let me = this;
             let view = me.getView();
             let arch = PVE.qemu.Architecture.getNodeArchitecture(view.nodename);
-            widget.setArchitecture?.(arch, view.vmConfig?.ostype, record?.data.model);
+            widget.setArchitecture?.(arch, record?.data.model);
             if (record?.data.model) {
                 widget.setValue(record.data.model);
             }
