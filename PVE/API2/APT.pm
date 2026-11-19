@@ -26,6 +26,7 @@ use PVE::Notify;
 use PVE::RESTHandler;
 use PVE::RPCEnvironment;
 use PVE::API2Tools;
+use PVE::S390xPort;
 
 use JSON;
 use PVE::JSONSchema qw(get_standard_option);
@@ -756,7 +757,13 @@ __PACKAGE__->register_method({
     code => sub {
         my ($param) = @_;
 
-        return Proxmox::RS::APT::Repositories::repositories("pve");
+        my $res = Proxmox::RS::APT::Repositories::repositories("pve");
+
+        # s390x: the packages come from the port's repository, which counts as a Proxmox VE one
+        push @{ $res->{'standard-repos'} }, PVE::S390xPort::standard_repository($res)
+            if PVE::S390xPort::is_s390x();
+
+        return $res;
     },
 });
 
@@ -791,6 +798,10 @@ __PACKAGE__->register_method({
     },
     code => sub {
         my ($param) = @_;
+
+        die "the repository of the s390x port is configured by the installer, see"
+            . " /etc/apt/sources.list.d\n"
+            if $param->{handle} eq $PVE::S390xPort::REPO_HANDLE;
 
         Proxmox::RS::APT::Repositories::add_repository(
             $param->{handle}, "pve", $param->{digest},

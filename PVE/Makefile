@@ -15,6 +15,7 @@ PERLSOURCE = 			\
 	NodeConfig.pm		\
 	PullMetric.pm		\
 	Report.pm		\
+	S390xPort.pm		\
 	S390xSysinfo.pm		\
 	VZDump.pm
 
