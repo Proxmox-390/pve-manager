@@ -8,6 +8,7 @@ Ext.define('PVE.qemu.Config', {
     // s390x: mainframe operating systems have no cloud-init
     removeCloudInitTab: function () {
         let me = this;
+        delete me.cloudInitNode;
         let node = me.store.getRoot().findChild('id', 'cloudinit', true);
         if (!node) {
             return;
@@ -16,6 +17,28 @@ Ext.define('PVE.qemu.Config', {
             me.selectById(me.firstItem);
         }
         node.remove();
+    },
+
+    // s390x: the Cloud-Init tab stays out of the menu until the OS type is known, a page that
+    // cannot load the config (e.g. while pveproxy restarts) does not show it for a mainframe OS.
+    // It stays if it is the selected tab, which a Linux VM's page restored.
+    detachCloudInitTab: function () {
+        let me = this;
+        let node = me.store.getRoot().findChild('id', 'cloudinit', true);
+        if (!node || me.getLayout().getActiveItem()?.itemId === 'cloudinit') {
+            return;
+        }
+        me.cloudInitNode = { node, parent: node.parentNode, next: node.nextSibling };
+        node.remove(false);
+    },
+
+    showCloudInitTab: function () {
+        let me = this;
+        let detached = me.cloudInitNode;
+        delete me.cloudInitNode;
+        if (detached) {
+            detached.parent.insertBefore(detached.node, detached.next);
+        }
     },
 
     initComponent: function () {
@@ -483,7 +506,11 @@ Ext.define('PVE.qemu.Config', {
 
         me.callParent();
 
-        if (s390x) {
+        // s390x: the config decides the consoles and whether there is a Cloud-Init tab; loaded
+        // again after a failure, once the status of the VM loads again
+        let s390xConfigState = 'pending';
+        let loadS390xConfig = function () {
+            s390xConfigState = 'loading';
             // changing the OS type or the terminals needs a restart of the VM anyway; the console
             // panel loads its consoles itself, it is created each time it gets selected
             Proxmox.Utils.API2Request({
@@ -492,15 +519,25 @@ Ext.define('PVE.qemu.Config', {
                     if (me.destroyed) {
                         return;
                     }
+                    s390xConfigState = 'loaded';
                     if (caps.vms['VM.Console'] && !template) {
                         consoleBtn.setSerialConsoles(PVE.qemu.Architecture.getS390xConsoles(data));
                     }
                     // an OS-type rule: cloud-init is for Linux guests only
-                    if (!PVE.qemu.Architecture.isS390xLinux(data.ostype)) {
+                    if (PVE.qemu.Architecture.isS390xLinux(data.ostype)) {
+                        me.showCloudInitTab();
+                    } else {
                         me.removeCloudInitTab();
                     }
                 },
+                failure: function () {
+                    s390xConfigState = 'pending';
+                },
             });
+        };
+        if (s390x) {
+            me.detachCloudInitTab();
+            loadS390xConfig();
         }
 
         var prevQMPStatus = 'unknown';
@@ -514,7 +551,15 @@ Ext.define('PVE.qemu.Config', {
 
             if (!success) {
                 status = qmpstatus = 'unknown';
+                if (s390x) {
+                    // keep the buttons until the status is known again, a running VM must
+                    // not look startable while pveproxy restarts
+                    return;
+                }
             } else {
+                if (s390x && s390xConfigState === 'pending') {
+                    loadS390xConfig();
+                }
                 rec = s.data.get('status');
                 status = rec ? rec.data.value : 'unknown';
                 rec = s.data.get('qmpstatus');
