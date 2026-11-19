@@ -30,7 +30,7 @@ Ext.define('PVE.qemu.DASDFields', {
             ['3390-54', 65520],
         ],
 
-        // address, size and volume of a DASD config entry, e.g.
+        // address, model, size and volume of a DASD config entry, e.g.
         // "0.0.0200, 3390-9 (10017 cylinders), local:100/vm-100-SYSRS1.raw"
         renderDASD: function (key, value) {
             let drive = PVE.Parser.parseQemuDrive(key, value);
@@ -38,26 +38,32 @@ Ext.define('PVE.qemu.DASDFields', {
                 return Ext.htmlEncode(value);
             }
             let size = drive.size;
+            let model = drive.model; // the device the guest sees, stored with the volume
             if (drive.interface === 'ckd') {
-                size = PVE.qemu.DASDFields.renderCKDSize(drive.cylinders);
+                size = PVE.qemu.DASDFields.renderCKDSize(drive.cylinders, model);
+                model = undefined;
             } else if (drive.media === 'cdrom') {
                 size = undefined;
             }
-            let parts = [drive.devno ?? gettext('no address'), size, drive.file];
+            let parts = [drive.devno ?? gettext('no address'), model, size, drive.file];
             if (PVE.Parser.parseBoolean(drive.ro)) {
                 parts.push(gettext('read-only'));
             }
             return Ext.htmlEncode(parts.filter((part) => !!part).join(', '));
         },
 
-        // "3390-9 (10017 cylinders)" or "3390 (1234 cylinders)"
-        renderCKDSize: function (cylinders) {
+        // "3390-9 (10017 cylinders)" or "3390 (1234 cylinders)": the configured model, else the
+        // 3390 model of that many cylinders
+        renderCKDSize: function (cylinders, model) {
             cylinders = parseInt(cylinders, 10);
-            if (!cylinders) {
-                return '3390';
+            if (!model) {
+                let entry = PVE.qemu.DASDFields.ckdModels.find(([, cyl]) => cyl === cylinders);
+                model = entry ? entry[0] : '3390';
             }
-            let model = PVE.qemu.DASDFields.ckdModels.find(([, cyl]) => cyl === cylinders);
-            return `${model ? model[0] : '3390'} (${cylinders} ${gettext('cylinders')})`;
+            if (!cylinders) {
+                return model;
+            }
+            return `${model} (${cylinders} ${gettext('cylinders')})`;
         },
     },
 
@@ -136,9 +142,8 @@ Ext.define('PVE.qemu.DASDFields', {
     setDrive: function (drive) {
         let me = this;
         me.down('pveCcwDevnoField').setValue(drive.devno);
-        me.down('field[name=ckdSize]').setValue(
-            me.kind === 'ckd' ? PVE.qemu.DASDFields.renderCKDSize(drive.cylinders) : '',
-        );
+        let size = PVE.qemu.DASDFields.renderCKDSize(drive.cylinders, drive.model);
+        me.down('field[name=ckdSize]').setValue(me.kind === 'ckd' ? size : '');
     },
 
     // put the values into the drive
