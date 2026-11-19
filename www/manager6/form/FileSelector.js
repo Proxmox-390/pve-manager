@@ -95,6 +95,9 @@ Ext.define('PVE.form.FileSelector', {
     // An optional filter function
     filter: undefined,
 
+    // s390x: the list shows AWSTAPE tape images (uploaded as ISO images)
+    tapeImages: false,
+
     listConfig: {
         width: 600,
         columns: [
@@ -157,6 +160,33 @@ Ext.define('PVE.form.FileSelector', {
                     },
                 },
             ];
+        }
+
+        if (me.tapeImages) {
+            // their format is AWSTAPE, not 'iso', the content type of their storage
+            me.listConfig = Ext.apply({}, me.listConfig);
+            me.listConfig.columns = me.listConfig.columns.map((column) =>
+                column.dataIndex === 'format'
+                    ? {
+                          ...column,
+                          width: 90,
+                          renderer: (value, meta, rec) =>
+                              PVE.qemu.S390xMedia.isTapeImage(rec.data.volid)
+                                  ? 'AWSTAPE'
+                                  : Ext.htmlEncode(value),
+                      }
+                    : column,
+            );
+            // the error tooltip of the empty field would cover the list
+            me.on('expand', () => {
+                me.preventMark = true;
+                me.clearInvalid();
+                Ext.tip.QuickTipManager.getQuickTip()?.hide();
+            });
+            me.on('collapse', () => {
+                me.preventMark = false;
+                me.validate();
+            });
         }
 
         me.callParent();

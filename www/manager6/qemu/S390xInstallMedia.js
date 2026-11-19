@@ -152,6 +152,7 @@ Ext.define('PVE.qemu.TapeInputPanel', {
                 nodename: me.nodename,
                 fileFilter: (rec) => PVE.qemu.S390xMedia.isTapeImage(rec.data.volid),
                 fileLabel: gettext('Tape image'),
+                tapeImages: true,
             },
             {
                 xtype: 'radiofield',
@@ -393,6 +394,9 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
         data: {
             mediaType: 'netboot',
             machineList: [],
+            // whether no storage of the node has the 'snippets' content type the network boot
+            // needs (the 'local' storage of s390x installs has none)
+            noSnippetsStorage: false,
         },
         formulas: {
             // CD/DVD drives only exist on the virtio machine
@@ -409,6 +413,7 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
             isNetboot: (get) => get('isS390xNode') && get('mediaType') === 'netboot',
             isTape: (get) => get('isS390xNode') && get('mediaType') === 'tape',
             isCD: (get) => get('isS390xNode') && get('mediaType') === 'iso',
+            noSnippetsHint: (get) => get('isNetboot') && get('noSnippetsStorage'),
         },
     },
 
@@ -446,6 +451,10 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
 
         onMediaChange: function (field, value) {
             if (value) {
+                // a medium chosen by hand is kept when the storages of another node are loaded
+                if (!this.selectingMedia) {
+                    this.mediaChosen = true;
+                }
                 let vm = this.getViewModel();
                 vm.set('mediaType', field.inputValue);
                 // apply the bindings now: the wizard checks the validity of the tab on this
@@ -454,7 +463,90 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
             }
         },
 
+        // The network boot is the default medium if a storage can hold its files. Without a
+        // storage with 'snippets' content, it would start with an empty required field: then
+        // the default is a tape, if there are tape images, else no medium.
+        loadStorages: function (nodename) {
+            let me = this;
+            let view = me.getView();
+            let vm = me.getViewModel();
+            let request = (me.storageRequest = {});
+            let current = () => !view.isDestroyed && me.storageRequest === request;
+            Proxmox.Utils.API2Request({
+                url: `/nodes/${nodename}/storage`,
+                params: { enabled: 1 },
+                method: 'GET',
+                success: function ({ result }) {
+                    if (!current()) {
+                        return;
+                    }
+                    let storages = result.data ?? [];
+                    let withContent = (type) =>
+                        storages.filter((s) => (s.content ?? '').split(',').includes(type));
+                    let noSnippets = withContent('snippets').length === 0;
+                    vm.set('noSnippetsStorage', noSnippets);
+                    if (!noSnippets) {
+                        if (!me.mediaChosen) {
+                            me.selectMedia('netboot');
+                        }
+                        return;
+                    }
+                    me.findTapeImage(nodename, withContent('iso'), (found) => {
+                        if (current() && !me.mediaChosen) {
+                            me.selectMedia(found ? 'tape' : 'none');
+                        }
+                    });
+                },
+            });
+        },
+
+        findTapeImage: function (nodename, storages, callback) {
+            let pending = storages.length;
+            let found = false;
+            if (!pending) {
+                callback(false);
+                return;
+            }
+            let done = () => {
+                if (--pending === 0) {
+                    callback(found);
+                }
+            };
+            storages.forEach((storage) =>
+                Proxmox.Utils.API2Request({
+                    url: `/nodes/${nodename}/storage/${storage.storage}/content`,
+                    params: { content: 'iso' },
+                    method: 'GET',
+                    success: function ({ result }) {
+                        let images = result.data ?? [];
+                        if (images.some((v) => PVE.qemu.S390xMedia.isTapeImage(v.volid))) {
+                            found = true;
+                        }
+                        done();
+                    },
+                    failure: done,
+                }),
+            );
+        },
+
+        selectMedia: function (mediaType) {
+            let me = this;
+            let radio = me.getView().down(`radiofield[inputValue=${mediaType}]`);
+            if (radio && !radio.getValue()) {
+                me.selectingMedia = true;
+                radio.setValue(true);
+                // the radio buttons are not rendered yet (the OS tab comes later), which leaves
+                // the others checked without the DOM: uncheck them, or a click on the network
+                // boot would not change anything
+                me.getView()
+                    .query('radiofield[name=mediaType]')
+                    .forEach((other) => other !== radio && other.setValue(false));
+                me.selectingMedia = false;
+            }
+        },
+
         init: function (view) {
+            let me = this;
             let vm = this.getViewModel();
             vm.bind('{nodename}', (nodename) => {
                 if (!nodename) {
@@ -465,6 +557,9 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
                         vm.set('machineList', list);
                     }
                 });
+                if (PVE.qemu.Architecture.getNodeArchitecture(nodename) === 's390x') {
+                    me.loadStorages(nodename);
+                }
             });
             // switching to a mainframe machine drops a selected CD/DVD image
             vm.bind('{cdAllowed}', (allowed) => {
@@ -522,6 +617,18 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
             },
         },
         {
+            xtype: 'displayfield',
+            userCls: 'pmx-hint',
+            padding: '0 0 0 125',
+            value: gettext(
+                "No storage has the 'snippets' content type for the files of the network boot. Add it to a storage under Datacenter → Storage.",
+            ),
+            hidden: true,
+            bind: {
+                hidden: '{!noSnippetsHint}',
+            },
+        },
+        {
             xtype: 'radiofield',
             name: 'mediaType',
             inputValue: 'tape',
@@ -536,6 +643,7 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
             insideWizard: true,
             fileFilter: (rec) => PVE.qemu.S390xMedia.isTapeImage(rec.data.volid),
             fileLabel: gettext('Tape image'),
+            tapeImages: true,
             bind: {
                 nodename: '{nodename}',
                 disabled: '{!isTape}',

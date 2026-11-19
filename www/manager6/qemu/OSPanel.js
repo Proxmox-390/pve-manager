@@ -43,6 +43,35 @@ Ext.define('PVE.qemu.OSPanel', {
             'checkbox[reference=enableSecondCD]': {
                 change: 'onSecondCDChange',
             },
+            // s390x: the OS type follows the install medium until it is chosen by hand
+            'combobox[name=osbase], combobox[name=ostype]': {
+                select: 'onOSTypeSelect',
+            },
+            'pveQemuS390xInstallMediaPanel radiofield[name=mediaType]': {
+                change: 'onS390xMediaChange',
+            },
+        },
+        onOSTypeSelect: function () {
+            this.osTypeChosen = true;
+        },
+        // Tapes are the install media of mainframe operating systems, so a
+        // tape suggests the 'Other' OS type, the other media Linux again.
+        onS390xMediaChange: function (field, value) {
+            let me = this;
+            if (!value || me.osTypeChosen) {
+                return;
+            }
+            if (me.getViewModel().get('current.architecture') !== 's390x') {
+                return;
+            }
+            let osbase = me.getView().down('combobox[name=osbase]');
+            if (field.inputValue === 'tape' && osbase.getValue() === 'Linux') {
+                osbase.setValue('Other');
+                me.osTypeSuggested = true;
+            } else if (field.inputValue !== 'tape' && me.osTypeSuggested) {
+                osbase.setValue('Linux');
+                me.osTypeSuggested = false;
+            }
         },
         onOSBaseChange: function (field, value) {
             let me = this;

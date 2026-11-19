@@ -16,6 +16,8 @@ Ext.define('PVE.form.IsoSelector', {
     // optional filter function for the images, and the label of the image field
     fileFilter: undefined,
     fileLabel: gettext('ISO image'),
+    // s390x: the images are AWSTAPE tapes (see PVE.form.FileSelector)
+    tapeImages: false,
 
     cbindData: function () {
         let me = this;
@@ -24,6 +26,7 @@ Ext.define('PVE.form.IsoSelector', {
             insideWizard: me.insideWizard,
             fileFilter: me.fileFilter,
             fileLabel: me.fileLabel,
+            tapeImages: me.tapeImages,
         };
     },
 
@@ -105,6 +108,7 @@ Ext.define('PVE.form.IsoSelector', {
             cbind: {
                 filter: '{fileFilter}',
                 fieldLabel: '{fileLabel}',
+                tapeImages: '{tapeImages}',
                 nodename: '{nodename}',
                 disabled: '{disabled}',
                 labelWidth: '{labelWidth}',
