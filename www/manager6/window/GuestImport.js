@@ -392,6 +392,10 @@ Ext.define('PVE.window.GuestImport', {
                             delete values.pool;
                         }
 
+                        // a new VM has nothing to delete, e.g. the default CPU type of an empty
+                        // selector (the API refuses 'delete' on create)
+                        delete values.delete;
+
                         let config = { ...view.vmConfig };
                         Ext.apply(config, values);
 
@@ -1179,6 +1183,15 @@ Ext.define('PVE.window.GuestImport', {
                     'isOva',
                     data.warnings.map((w) => w.type).indexOf('ova-needs-extracting') !== -1,
                 );
+
+                // the CPU types and the default one of the node's architecture, e.g. 'host' on
+                // s390x; the x86 default stays the GUI's explicit x86-64-v2-AES
+                let arch = PVE.qemu.Architecture.getNodeArchitecture(me.nodename);
+                if (arch !== 'x86_64') {
+                    let cputype = me.lookup('cputype');
+                    cputype.setArch(arch);
+                    cputype.setValue(me.vmConfig.cpu ?? '');
+                }
 
                 let osinfo = PVE.Utils.get_kvm_osinfo(me.vmConfig.ostype ?? '');
                 let prepareForVirtIO =
