@@ -60,6 +60,10 @@ Ext.define('PVE.qemu.OSPanel', {
             let arch = me.getViewModel().get('current.architecture');
             var targetValues = PVE.qemu.OSDefaults.getDefaults(ostype, arch);
 
+            // s390x: the busses of the disks depend on the OS type (DASDs only for mainframe OSes)
+            Ext.ComponentQuery.query('pveQemuCreateWizard pveControllerSelector').forEach(
+                (selector) => selector.setOstype(ostype),
+            );
             me.setWidget('pveBusSelector', targetValues.busType);
             me.setWidget('pveNetworkCardSelector', targetValues.networkCard);
             me.setWidget('CPUModelSelector', targetValues.cputype);

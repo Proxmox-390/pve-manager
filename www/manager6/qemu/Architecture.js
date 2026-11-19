@@ -70,6 +70,17 @@ Ext.define('PVE.qemu.Architecture', {
         x86_64: ['ide', 'sata', 'virtio', 'scsi', 'unused'],
         aarch64: ['sata', 'virtio', 'scsi', 'unused'],
         s390x: ['virtio', 'scsi', 'fba', 'ckd', 'unused'], // fba/ckd: DASDs
+        // s390x VMs of mainframe operating systems, see getBusCategory()
+        's390x-dasd': ['fba', 'ckd', 'unused'],
+    },
+
+    // The category of PVE.qemu.Architecture.allowedBusses for new disks of a VM: its
+    // architecture, but mainframe operating systems (s390x, not Linux) only get DASDs.
+    getBusCategory: function (arch, ostype) {
+        if (arch === 's390x' && !PVE.qemu.Architecture.isS390xLinux(ostype)) {
+            return 's390x-dasd';
+        }
+        return arch;
     },
 
     allowedFirmware: {
@@ -143,9 +154,10 @@ Ext.define('PVE.qemu.Architecture', {
         return [match[1] ?? '0', match[2].toLowerCase().padStart(4, '0')];
     },
 
-    // On s390x, the OS type selects the devices: Linux guests use virtio-ccw devices and the
-    // firmware boot order, other (mainframe) OSes, also when unset, the mainframe devices and IPL
-    // settings.
+    // On s390x, the machine class decides which devices a VM can have, the OS type only the
+    // defaults: Linux guests get virtio-ccw devices and the firmware boot order, other (mainframe)
+    // OSes, also when unset, the mainframe devices and IPL settings. Exceptions: the disks of
+    // mainframe OSes are DASDs only, and they get no cloud-init drive.
     isS390xLinux: function (ostype) {
         return ostype === 'l24' || ostype === 'l26';
     },

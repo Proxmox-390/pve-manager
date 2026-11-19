@@ -2130,7 +2130,8 @@ Ext.define('PVE.Utils', {
 
         sortByPreviousUsage: function (vmconfig, nodename) {
             let arch = PVE.qemu.Architecture.getGuestArchitecture(vmconfig.arch, nodename);
-            let allowed = PVE.qemu.Architecture.allowedBusses[arch];
+            let category = PVE.qemu.Architecture.getBusCategory(arch, vmconfig.ostype);
+            let allowed = PVE.qemu.Architecture.allowedBusses[category];
             let controllerList = ['ide', 'virtio', 'scsi', 'sata', 'fba', 'ckd'].filter(
                 (controller) => !allowed || allowed.includes(controller),
             );

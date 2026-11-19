@@ -49,8 +49,8 @@ Ext.define('PVE.form.ControllerSelector', {
 
         let clist;
         let arch = PVE.qemu.Architecture.getGuestArchitecture(vmconfig.arch, me.nodename);
-        bussel.setCategory(arch);
         if (autoSelect === 'cdrom') {
+            bussel.setCategory(arch);
             let [controller, id] = PVE.qemu.Architecture.defaultCDDrive[arch];
             if (!Ext.isDefined(me.vmconfig[`${controller}${id}`])) {
                 bussel.setValue(controller);
@@ -58,16 +58,39 @@ Ext.define('PVE.form.ControllerSelector', {
                 return;
             }
             clist = ['ide', 'scsi', 'sata'];
+            clist = me.filterListByArchitecture(clist, arch);
         } else {
+            // the busses of disks can depend on the OS type too
+            let category = PVE.qemu.Architecture.getBusCategory(arch, vmconfig.ostype);
+            bussel.setCategory(category);
             // in most cases we want to add a disk to the same controller we previously used
             clist = PVE.Utils.sortByPreviousUsage(me.vmconfig, me.nodename);
+            clist = me.filterListByArchitecture(clist, category);
         }
-
-        clist = me.filterListByArchitecture(clist, arch);
 
         me.setToFree(clist, bussel, deviceid);
 
         deviceid.validate();
+    },
+
+    // The OS type changed (creation wizard): offer the busses of disks it can have, and switch
+    // to a free device of one of them if the selected bus is not.
+    setOstype: function (ostype) {
+        let me = this;
+        me.vmconfig = { ...me.vmconfig, ostype };
+        let bussel = me.down('field[name=controller]');
+        let arch = PVE.qemu.Architecture.getGuestArchitecture(me.vmconfig.arch, me.nodename);
+        let category = PVE.qemu.Architecture.getBusCategory(arch, ostype);
+        bussel.setCategory(category);
+        let allowed = PVE.qemu.Architecture.allowedBusses[category];
+        if (allowed && !allowed.includes(bussel.getValue())) {
+            let clist = PVE.Utils.sortByPreviousUsage(me.vmconfig, me.nodename);
+            me.setToFree(
+                me.filterListByArchitecture(clist, category),
+                bussel,
+                me.down('field[name=deviceid]'),
+            );
+        }
     },
 
     getConfId: function () {
