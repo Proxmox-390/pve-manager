@@ -66,6 +66,10 @@ Ext.define('PVE.qemu.HardwareView', {
         if (isS390x) {
             PVE.qemu.Architecture.loadS390xMachines(nodename, (list) => {
                 s390xMachines = list;
+                // the machine row shows the description of the machine type
+                if (me.rendered && !me.destroyed) {
+                    me.getView().refresh();
+                }
             });
         }
         let processorEditor = {
@@ -205,6 +209,9 @@ Ext.define('PVE.qemu.HardwareView', {
                         me.getObjectValue('arch'),
                         nodename,
                     );
+                    if (isS390x) {
+                        return PVE.qemu.Architecture.renderS390xMachineConfig(value, s390xMachines);
+                    }
                     let machineConf = PVE.Parser.parsePropertyString(value, 'type');
                     let machineType = machineConf.type;
                     if (

@@ -283,6 +283,34 @@ Ext.define('PVE.qemu.Architecture', {
         return machine.description ? `${machine.id} (${machine.description})` : machine.id;
     },
 
+    // The configured machine of an s390x VM for display, by its description and version when
+    // the loaded machine list knows it: "CZAM hardware mode v1 (czam, latest)" for the alias of
+    // the newest version, "CZAM hardware mode v1 (czam-v1)" for a pinned one. The virtio
+    // machine as in the machine selector, unknown ones as they are. HTML-encoded.
+    renderS390xMachineConfig: function (value, list) {
+        let type = PVE.Parser.parsePropertyString(value ?? '', 'type').type;
+        if (!type) {
+            return PVE.Utils.render_qemu_machine('', 's390x');
+        }
+        let virtio = PVE.qemu.Architecture.defaultMachines.s390x;
+        if (type === virtio) {
+            return `virtio (${virtio})`;
+        }
+        let entry = (list ?? []).find((m) => m.id === type && m.class === 'mainframe');
+        if (!entry) {
+            return Ext.htmlEncode(type);
+        }
+        let machine = PVE.qemu.Architecture.parseS390xMachine(entry);
+        if (!machine.description) {
+            return Ext.htmlEncode(type);
+        }
+        // the version of a versioned machine type (czam-v1), or the one its alias points to
+        let target = machine.alias ? list.find((m) => m.id === machine.alias) : entry;
+        let version = target?.version?.match(/^v\d+$/) ? ` ${target.version}` : '';
+        let details = machine.alias ? `${type}, ${gettext('latest')}` : type;
+        return Ext.htmlEncode(`${machine.description}${version} (${details})`);
+    },
+
     // The machine type a new s390x VM gets, from a loaded machine list.
     getS390xNewVmMachine: function (list) {
         let entry = list.find((machine) => machine['new-vm-default']);
