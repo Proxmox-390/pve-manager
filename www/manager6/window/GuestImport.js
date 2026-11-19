@@ -43,14 +43,21 @@ Ext.define('PVE.window.GuestImport', {
             if (record?.data.model) {
                 widget.setValue(record.data.model);
             }
+            // the model was checked against the default list before, e.g. qeth
+            widget.validate();
         },
 
         renderDiskOptions: function (value) {
-            return Ext.htmlEncode(
-                Object.entries(value ?? {})
-                    .map(([key, val]) => `${key}=${val}`)
-                    .join(', '),
-            );
+            let { devno, model, ...others } = value ?? {};
+            if (devno === undefined) {
+                others = value ?? {};
+            }
+            let parts = Object.entries(others).map(([key, val]) => `${key}=${val}`);
+            if (devno !== undefined) {
+                // s390x DASDs: "0.0.0300, 3390-9", address first like in the hardware view
+                parts.unshift(...[devno, model].filter((part) => !!part));
+            }
+            return Ext.htmlEncode(parts.join(', '));
         },
 
         diskStorageChange: function (storageSelector, value) {
@@ -889,6 +896,7 @@ Ext.define('PVE.window.GuestImport', {
                     columnB: [
                         {
                             xtype: 'displayfield',
+                            reference: 'cdLabel',
                             fieldLabel: gettext('CD/DVD Drives'),
                             labelWidth: 200,
                         },
@@ -1055,6 +1063,46 @@ Ext.define('PVE.window.GuestImport', {
                             uncheckedValue: false,
                             value: false,
                         },
+                        {
+                            // s390x: the tape drives and 3270 terminals of the guest, created as
+                            // they are (the tape media get imported to the media storage)
+                            xtype: 'displayfield',
+                            reference: 's390xDeviceLabel',
+                            fieldLabel: gettext('Mainframe Devices'),
+                            labelWidth: 200,
+                            hidden: true,
+                            style: {
+                                paddingTop: '10px',
+                            },
+                        },
+                        {
+                            xtype: 'grid',
+                            reference: 's390xDeviceGrid',
+                            hidden: true,
+                            maxHeight: 200,
+                            disableSelection: true,
+                            store: {
+                                fields: ['id', 'text', 'order'],
+                                data: [],
+                                sorters: ['order'],
+                            },
+                            columns: [
+                                {
+                                    text: gettext('ID'),
+                                    dataIndex: 'id',
+                                    width: 100,
+                                    sortable: false,
+                                    renderer: Ext.htmlEncode,
+                                },
+                                {
+                                    text: gettext('Device'),
+                                    dataIndex: 'text',
+                                    flex: 1,
+                                    sortable: false,
+                                    // already encoded
+                                },
+                            ],
+                        },
                     ],
                 },
                 {
@@ -1096,6 +1144,35 @@ Ext.define('PVE.window.GuestImport', {
         },
     ],
 
+    // s390x: no SCSI controller choice (VirtIO SCSI only), CD/DVD drives only if the guest has some,
+    // and the tape drives and 3270 terminals of the guest listed
+    setS390xDevices: function (hasCdroms) {
+        let me = this;
+
+        for (const ref of ['prepareForVirtIO', 'scsihw']) {
+            me.lookup(ref).setHidden(true);
+        }
+        me.lookup('cdLabel').setHidden(!hasCdroms);
+        me.lookup('cdGrid').setHidden(!hasCdroms);
+
+        let devices = [];
+        for (const [key, value] of Object.entries(me.vmConfig)) {
+            let match = key.match(/^(tape|terminal)(\d+)$/);
+            if (!match) {
+                continue;
+            }
+            let text =
+                match[1] === 'tape'
+                    ? PVE.qemu.S390xMedia.renderTape(value, key)
+                    : PVE.qemu.Architecture.renderTerminal(value);
+            let order = (match[1] === 'tape' ? 0 : 100) + parseInt(match[2], 10);
+            devices.push({ id: key, text, order });
+        }
+        me.lookup('s390xDeviceGrid').getStore().setData(devices);
+        me.lookup('s390xDeviceLabel').setHidden(!devices.length);
+        me.lookup('s390xDeviceGrid').setHidden(!devices.length);
+    },
+
     initComponent: function () {
         let me = this;
 
@@ -1111,7 +1188,24 @@ Ext.define('PVE.window.GuestImport', {
             throw 'no nodename given';
         }
 
+        // s390x: room for the device numbers, DASD options and qeth model in the grids
+        let s390x = PVE.qemu.Architecture.getNodeArchitecture(me.nodename) === 's390x';
+        if (s390x) {
+            me.width = 900;
+        }
+
         me.callParent();
+
+        if (s390x) {
+            let widths = { id: 60, size: 80, format: 150 };
+            for (const column of me.lookup('diskGrid').getColumns()) {
+                if (widths[column.dataIndex]) {
+                    column.setWidth(widths[column.dataIndex]);
+                } else if (['import-from', 'options'].includes(column.dataIndex)) {
+                    column.flex = 1;
+                }
+            }
+        }
 
         me.setTitle(
             Ext.String.format(
@@ -1264,6 +1358,10 @@ Ext.define('PVE.window.GuestImport', {
                 });
 
                 me.lookup('prepareForVirtIO').setValue(prepareForVirtIO);
+
+                if (arch === 's390x') {
+                    me.setS390xDevices(cdroms.length > 0);
+                }
 
                 // s390x: the media of the tape drives (create-args, passed on as they are), which
                 // get imported to 'media-storage'
