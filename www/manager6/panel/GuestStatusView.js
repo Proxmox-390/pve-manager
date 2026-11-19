@@ -130,6 +130,25 @@ Ext.define('PVE.panel.GuestStatusView', {
             maxField: 'maxmem',
             warningThreshold: 0.9,
             criticalThreshold: 0.975,
+            // s390x: without memory statistics of the guest (mainframe operating systems have no
+            // balloon driver), qemu-server reports the memory of the QEMU process, which includes
+            // its own and exceeds the VM's memory. That is the host memory usage below, the guest
+            // usage is unknown: show the VM's memory, without a usage bar.
+            renderer: function (used, max) {
+                let me = this;
+                let view = me.up('pveGuestStatusView');
+                let noGuestStats =
+                    view?.pveSelNode.data.type === 'qemu' &&
+                    PVE.qemu.Architecture.getNodeArchitecture(view.pveSelNode.data.node) ===
+                        's390x' &&
+                    view.getRecordValue('status') === 'running' &&
+                    view.getRecordValue('freemem') === '';
+                me.setPrintBar(!noGuestStats);
+                if (noGuestStats) {
+                    return `${Proxmox.Utils.render_size(max)} (${gettext('no guest statistics')})`;
+                }
+                return Proxmox.Utils.render_size_usage(used, max);
+            },
         },
         {
             itemId: 'memory-host',
