@@ -5,6 +5,9 @@
 // a tab or the panel is left (the 3270 sessions persist on the host, the SCLP consoles stay with
 // the VM), so xterm.js must not ask whether to leave its page then.
 //
+// The SCLP line-mode console is no terminal but a hardcopy (PVE.qemu.SclpLineModeConsole): the
+// log of the console kept on the host, and an input line for commands.
+//
 // The config panel creates this panel each time its Console entry is selected (and destroys it
 // when another one is), so the panel loads the consoles of the VM itself.
 Ext.define('PVE.qemu.S390xConsole', {
@@ -62,14 +65,25 @@ Ext.define('PVE.qemu.S390xConsole', {
 
         me.removeAll();
         me.add(
-            consoles.map(({ serial, text, model }) => ({
-                title: text,
-                serial,
-                model3270: model,
-                layout: 'fit',
-                border: false,
-                items: [{ xtype: 'uxiframe', itemId: 'frame' }],
-            })),
+            consoles.map(({ serial, text, model }) =>
+                serial === 'sclplm'
+                    ? {
+                          // a hardcopy view of the log, not a terminal
+                          xtype: 'pveQemuSclpLineModeConsole',
+                          title: text,
+                          serial,
+                          nodename: me.nodename,
+                          vmid: me.vmid,
+                      }
+                    : {
+                          title: text,
+                          serial,
+                          model3270: model,
+                          layout: 'fit',
+                          border: false,
+                          items: [{ xtype: 'uxiframe', itemId: 'frame' }],
+                      },
+            ),
         );
         // adding the first tab activates it, but only once the tab panel is rendered
         if (!me.getActiveTab()) {
@@ -108,8 +122,12 @@ Ext.define('PVE.qemu.S390xConsole', {
             tab.on('afterrender', () => me.loadConsole(tab), me, { single: true });
             return;
         }
-        let frame = tab.down('#frame');
         tab.consoleLoaded = true;
+        if (tab.isSclpLineModeConsole) {
+            tab.connect();
+            return;
+        }
+        let frame = tab.down('#frame');
         frame.load(me.consoleUrl(tab.serial, tab.model3270));
         frame.focus();
     },
@@ -119,6 +137,10 @@ Ext.define('PVE.qemu.S390xConsole', {
             return;
         }
         tab.consoleLoaded = false;
+        if (tab.isSclpLineModeConsole) {
+            tab.disconnect();
+            return;
+        }
         tab.down('#frame').load('about:blank');
     },
 
@@ -127,7 +149,9 @@ Ext.define('PVE.qemu.S390xConsole', {
         let me = this;
 
         let tab = me.getActiveTab();
-        if (tab?.consoleLoaded) {
+        if (tab?.isSclpLineModeConsole && tab.consoleLoaded) {
+            tab.reconnect();
+        } else if (tab?.consoleLoaded) {
             tab.down('#frame').getWin().location.reload();
         } else {
             me.loadConsole(tab);

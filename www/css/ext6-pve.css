@@ -708,3 +708,25 @@ table.osds td:first-of-type {
 .pmx-column-wrapped > div {
     white-space: pre-wrap;
 }
+
+/* the hardcopy view of the SCLP line-mode console of s390x VMs */
+.pve-sclplm-text {
+    font-family: monospace;
+    font-size: 13px;
+    line-height: 1.35;
+    margin: 4px 8px;
+    white-space: pre;
+}
+
+mark.pve-sclplm-match {
+    background-color: #ffe066;
+    color: #000;
+}
+
+mark.pve-sclplm-match.pve-sclplm-current {
+    background-color: #ff9632;
+}
+
+.pve-sclplm-error {
+    color: #d9534f;
+}
