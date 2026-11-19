@@ -215,6 +215,41 @@ Ext.define('PVE.qemu.Architecture', {
         });
     },
 
+    // An entry of the s390x machine list with the annotations QEMU appends to the description of
+    // a machine type parsed: 'alias' (the machine type it is an alias of, e.g. czam of the newest
+    // czam-vN), 'deprecated', and the 'description' without them, e.g. 'CZAM hardware mode'.
+    parseS390xMachine: function (entry) {
+        let description = entry.description ?? '';
+        let alias = description.match(/\(alias of ([^)\s]+)\)/)?.[1];
+        let deprecated = /\(deprecated\)/.test(description);
+        description = description
+            .replace(/\s*\((?:alias of [^)]*|default|deprecated|secure)\)/g, '')
+            .trim();
+        if (description === entry.id) {
+            description = ''; // qemu-server's fallback for none
+        }
+        return { ...entry, description, alias, deprecated };
+    },
+
+    // The mainframe class machine types to offer for selection, from a loaded machine list, with
+    // their 'text': an alias for the newest version of a machine type (e.g. czam) instead of its
+    // versions (czam-v1, czam-v2), no deprecated ones. Each machine type has its own description
+    // and class, there can be several mainframe class ones.
+    getS390xMainframeChoices: function (list) {
+        let machines = list
+            .filter((m) => m.class === 'mainframe')
+            .map((m) => PVE.qemu.Architecture.parseS390xMachine(m));
+        let aliases = machines.filter((m) => m.alias).map((m) => m.id);
+        return machines
+            .filter((m) => !m.deprecated && !aliases.some((alias) => m.id.startsWith(`${alias}-`)))
+            .map((m) => ({ ...m, text: PVE.qemu.Architecture.renderS390xMachine(m) }));
+    },
+
+    // "czam (CZAM hardware mode)"
+    renderS390xMachine: function (machine) {
+        return machine.description ? `${machine.id} (${machine.description})` : machine.id;
+    },
+
     // The machine type a new s390x VM gets, from a loaded machine list.
     getS390xNewVmMachine: function (list) {
         let entry = list.find((machine) => machine['new-vm-default']);

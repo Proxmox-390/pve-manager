@@ -59,11 +59,8 @@ Ext.define('PVE.form.QemuMachineSelector', {
             }
             let virtio = PVE.qemu.Architecture.defaultMachines.s390x;
             let items = [{ key: virtio, value: `virtio (${virtio})` }];
-            list.filter((m) => m.class === 'mainframe').forEach((m) =>
-                items.push({
-                    key: m.id,
-                    value: m.description ? `${m.id} (${m.description})` : m.id,
-                }),
+            PVE.qemu.Architecture.getS390xMainframeChoices(list).forEach((m) =>
+                items.push({ key: m.id, value: m.text }),
             );
             me.s390xItems = items;
             me.store.clearFilter();
@@ -77,8 +74,15 @@ Ext.define('PVE.form.QemuMachineSelector', {
                 value = virtio;
             }
             if (!items.find((item) => item.key === value)) {
-                // keep an unknown configured value visible, the backend refuses it at start
-                me.store.add({ key: value, value });
+                // keep a configured value visible: a pinned version, a deprecated machine type, or
+                // an unknown one, which the backend refuses at start
+                let entry = list.find((m) => m.id === value && m.class === 'mainframe');
+                let text = entry
+                    ? PVE.qemu.Architecture.renderS390xMachine(
+                          PVE.qemu.Architecture.parseS390xMachine(entry),
+                      )
+                    : value;
+                me.store.add({ key: value, value: text });
             }
             me.setValue(value);
             me.fireEvent('s390xmachinesloaded', me, list);
