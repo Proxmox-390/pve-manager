@@ -187,6 +187,27 @@ Ext.define('PVE.panel.IPViewQEMU', {
             me.nics = records?.[0]?.data.result;
             me.updateStatus(!success);
         });
+
+        // s390x: mainframe operating systems have no QEMU guest agent, their IPs are not shown
+        if (PVE.qemu.Architecture.getNodeArchitecture(nodename) === 's390x') {
+            Proxmox.Utils.API2Request({
+                url: `/nodes/${nodename}/qemu/${vmid}/config`,
+                method: 'GET',
+                success: function ({ result }) {
+                    if (me.destroyed) {
+                        return;
+                    }
+                    let ostype = result.data?.ostype;
+                    me.s390xMainframe = !PVE.qemu.Architecture.isS390xLinux(ostype);
+                    me.updateS390xVisibility();
+                },
+            });
+        }
+    },
+
+    updateS390xVisibility: function () {
+        let me = this;
+        me.setHidden(!!me.s390xMainframe && !me.agent);
     },
 
     updateStatus: function (unsuccessful, defaultText) {
@@ -225,6 +246,9 @@ Ext.define('PVE.panel.IPViewQEMU', {
 
         me.agent = agentRec && agentRec.data.value === 1;
         me.running = state && state.data.value === 'running';
+        if (me.s390xMainframe !== undefined) {
+            me.updateS390xVisibility();
+        }
 
         let caps = Ext.state.Manager.get('GuiCap');
         if (!caps.vms['VM.GuestAgent.Audit']) {

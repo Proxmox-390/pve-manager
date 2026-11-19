@@ -155,17 +155,73 @@ Ext.define('PVE.qemu.Options', {
                 required: true,
                 visible: s390x,
                 editor: caps.vms['VM.Config.Disk'] ? 'PVE.qemu.IPLEdit' : undefined,
-                renderer: function (value) {
-                    if (!value) {
-                        return `${Proxmox.Utils.defaultText} (${gettext('boot order')})`;
+                renderer: function (value, metaData, record, ri, ci, store, pending) {
+                    let text = `${Proxmox.Utils.defaultText} (${gettext('boot order')})`;
+                    if (value) {
+                        let ipl = PVE.Parser.parsePropertyString(value, 'device');
+                        text = Ext.htmlEncode(ipl.device ?? '');
+                        if (ipl.loadparm) {
+                            text += `, ${gettext('loadparm')} ${Ext.htmlEncode(ipl.loadparm)}`;
+                        }
                     }
-                    let ipl = PVE.Parser.parsePropertyString(value, 'device');
-                    let text = Ext.htmlEncode(ipl.device ?? '');
-                    if (ipl.loadparm) {
-                        text += `, ${gettext('loadparm')} ${Ext.htmlEncode(ipl.loadparm)}`;
+                    // a network boot replaces the IPL (once: at the next start)
+                    let netboot = me.getObjectValue('netboot', undefined, pending);
+                    if (netboot) {
+                        let once = PVE.Parser.parseBoolean(
+                            PVE.Parser.parsePropertyString(netboot, 'url').once,
+                            true,
+                        );
+                        return once
+                            ? `${gettext('Network boot')} (${gettext('once')}), ${gettext('then')} ${text}`
+                            : gettext('Network boot');
                     }
                     return text;
                 },
+            },
+            // s390x: the network boot of an installer (also in the hardware view)
+            netboot: {
+                header: gettext('Network Boot'),
+                visible: s390x,
+                editor: caps.vms['VM.Config.CDROM'] ? 'PVE.qemu.NetbootEdit' : undefined,
+                renderer: (value) => PVE.qemu.S390xMedia.renderNetboot(value),
+            },
+            // the code page of the line-mode console (mainframe operating systems, see below)
+            'sclplm-codepage': {
+                header: gettext('Line-mode console code page'),
+                required: true,
+                visible: false,
+                defaultValue: '',
+                renderer: (value) =>
+                    value
+                        ? Ext.htmlEncode(value.toUpperCase())
+                        : `${Proxmox.Utils.defaultText} (CP037)`,
+                editor: caps.vms['VM.Config.Options']
+                    ? {
+                          xtype: 'proxmoxWindowEdit',
+                          subject: gettext('Line-mode console code page'),
+                          width: 450,
+                          items: [
+                              {
+                                  xtype: 'proxmoxKVComboBox',
+                                  name: 'sclplm-codepage',
+                                  fieldLabel: gettext('Code page'),
+                                  value: '__default__',
+                                  comboItems: [
+                                      ['__default__', `${Proxmox.Utils.defaultText} (CP037)`],
+                                      ['cp037', 'CP037'],
+                                      ['cp500', 'CP500 (Linux)'],
+                                  ],
+                              },
+                              {
+                                  xtype: 'displayfield',
+                                  userCls: 'pmx-hint',
+                                  value: gettext(
+                                      "The EBCDIC code page of the guest on the line-mode console. Linux takes '%' to switch the case of the input: enter '%%' for a '%'. Applies at the next start.",
+                                  ),
+                              },
+                          ],
+                      }
+                    : undefined,
             },
             // forwarding of the line-mode console (mainframe operating systems, see below)
             'sclplm-syslog': {
@@ -335,6 +391,7 @@ Ext.define('PVE.qemu.Options', {
                 renderer: Ext.String.htmlEncode,
                 editor: caps.vms['VM.Config.HWType'] ? 'PVE.qemu.Smbios1Edit' : undefined,
             },
+            // s390x: hidden for mainframe operating systems unless set (see below)
             agent: {
                 header: 'QEMU Guest Agent',
                 defaultValue: false,
@@ -528,15 +585,31 @@ Ext.define('PVE.qemu.Options', {
             me.mon(me.rstore, 'load', function () {
                 let ostype = me.getObjectValue('ostype', undefined, true);
                 let boot = PVE.qemu.Architecture.isS390xLinux(ostype);
+                // the QEMU guest agent is a Linux program, mainframe operating systems have
+                // none: only shown for them if set, so it can be turned off
+                let agent = boot || !!me.getObjectValue('agent', undefined, true);
                 // only the mainframe operating systems have the line-mode console
-                if (rows.boot.visible !== boot || rows['sclplm-syslog'].visible !== !boot) {
+                if (
+                    rows.boot.visible !== boot ||
+                    rows['sclplm-syslog'].visible !== !boot ||
+                    rows['sclplm-codepage'].visible !== !boot ||
+                    rows.agent.visible !== agent
+                ) {
                     rows.boot.visible = boot;
                     rows['sclplm-syslog'].visible = !boot;
+                    rows['sclplm-codepage'].visible = !boot;
+                    rows.agent.visible = agent;
                     // apply the row filter again (store.filter() without a filter does not)
                     let filters = me.getStore().getFilters();
                     let rowFilters = filters.getRange();
                     filters.removeAll();
                     filters.add(rowFilters);
+                }
+                // the IPL row shows a network boot
+                let netboot = me.getObjectValue('netboot', undefined, true) ?? '';
+                if (netboot !== me.lastNetboot) {
+                    me.lastNetboot = netboot;
+                    me.getView().refresh();
                 }
             });
         }

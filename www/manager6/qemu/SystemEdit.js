@@ -18,6 +18,14 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             isS390x: function (get) {
                 return get('current.architecture') === 's390x';
             },
+            // the QEMU guest agent is a Linux program (virtio-serial); mainframe operating
+            // systems have none
+            noGuestAgent: function (get) {
+                return (
+                    get('current.architecture') === 's390x' &&
+                    !PVE.qemu.Architecture.isS390xLinux(get('current.ostype'))
+                );
+            },
         },
     },
 
@@ -321,6 +329,10 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             defaultValue: 0,
             deleteDefaultValue: true,
             fieldLabel: gettext('Qemu Agent'),
+            bind: {
+                hidden: '{noGuestAgent}',
+                disabled: '{noGuestAgent}',
+            },
         },
         {
             // fake for spacing
