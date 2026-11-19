@@ -5,6 +5,19 @@ Ext.define('PVE.qemu.Config', {
     onlineHelp: 'chapter_virtual_machines',
     userCls: 'proxmox-tags-full',
 
+    // s390x: mainframe operating systems have no cloud-init
+    removeCloudInitTab: function () {
+        let me = this;
+        let node = me.store.getRoot().findChild('id', 'cloudinit', true);
+        if (!node) {
+            return;
+        }
+        if (me.getLayout().getActiveItem()?.itemId === 'cloudinit') {
+            me.selectById(me.firstItem);
+        }
+        node.remove();
+    },
+
     initComponent: function () {
         var me = this;
         var vm = me.pveSelNode.data;
@@ -468,14 +481,21 @@ Ext.define('PVE.qemu.Config', {
 
         me.callParent();
 
-        if (s390x && caps.vms['VM.Console'] && !template) {
+        if (s390x) {
             // changing the OS type or the terminals needs a restart of the VM anyway; the console
             // panel loads its consoles itself, it is created each time it gets selected
             Proxmox.Utils.API2Request({
                 url: base_url + '/config',
                 success: function ({ result: { data } }) {
-                    if (!me.destroyed) {
+                    if (me.destroyed) {
+                        return;
+                    }
+                    if (caps.vms['VM.Console'] && !template) {
                         consoleBtn.setSerialConsoles(PVE.qemu.Architecture.getS390xConsoles(data));
+                    }
+                    // an OS-type rule: cloud-init is for Linux guests only
+                    if (!PVE.qemu.Architecture.isS390xLinux(data.ostype)) {
+                        me.removeCloudInitTab();
                     }
                 },
             });
