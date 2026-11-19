@@ -7,6 +7,7 @@ use IO::File;
 use LWP::UserAgent;
 use POSIX qw(strftime);
 
+use PVE::S390xPort;
 use PVE::SafeSyslog;
 use PVE::Storage;
 use PVE::Tools qw(run_command);
@@ -169,8 +170,8 @@ sub download_aplinfo {
         eval { run_command(["gunzip", "-f", $tmpgz]) };
         die "update failed: unable to unpack '$tmpgz'\n" if $@;
 
-        # verify signature
-        my $trustedkeyring = "/usr/share/doc/pve-manager/trustedkeys.gpg";
+        # verify signature (s390x: the index of the port is signed with its repository key)
+        my $trustedkeyring = $aplinfo->{keyring} // "/usr/share/doc/pve-manager/trustedkeys.gpg";
         my $cmd = "/usr/bin/sqv --keyring $trustedkeyring $sigfn $tmp";
 
         my $logfunc = sub { logmsg($logfd, "signature verification: $_[0]"); };
@@ -197,6 +198,12 @@ sub download_aplinfo {
 }
 
 sub get_apl_sources {
+    # s390x: Proxmox's and TurnKey's templates are amd64 and arm64 only, the port has its own
+    if (PVE::S390xPort::is_s390x()) {
+        my $source = PVE::S390xPort::aplinfo_source();
+        return $source ? [$source] : [];
+    }
+
     my $sources = [
         {
             host => "download.proxmox.com",
@@ -234,6 +241,8 @@ sub update {
     }
 
     my $sources = get_apl_sources();
+    logmsg($logfd, "no template index: the repository of the s390x port is not configured")
+        if !scalar(@$sources) && PVE::S390xPort::is_s390x();
 
     mkdir $APL_INFO_DIRECTORY;
 
@@ -264,6 +273,19 @@ sub load_data {
             read_aplinfo("$APL_INFO_DIRECTORY/$host", $list, $info->{url});
         };
         warn $@ if $@;
+    }
+
+    # s390x: templates of the node's architecture only
+    if (PVE::S390xPort::is_s390x()) {
+        for my $section (keys %$list) {
+            for my $template (keys %{ $list->{$section} }) {
+                my $res = $list->{$section}->{$template};
+                next if $res->{'package'} && $res->{'package'} eq 'pve-web-news';
+                delete $list->{$section}->{$template}
+                    if ($res->{architecture} // '') ne 's390x';
+            }
+            delete $list->{$section} if !%{ $list->{$section} };
+        }
     }
 
     return $list;

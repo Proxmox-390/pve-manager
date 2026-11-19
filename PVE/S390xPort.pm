@@ -9,6 +9,10 @@ package PVE::S390xPort;
 #
 #   - The APT repository API lists it as the standard repository 's390x-port', so that the node
 #     summary and the Repositories panel know a Proxmox VE repository is configured.
+#   - Its container template index (aplinfo) is published next to it, at
+#     <repository URL>/images/aplinfo-pve-9-s390x.dat (.gz, signed .asc), signed with the key of
+#     the repository; pveam uses it instead of Proxmox's and TurnKey's indexes, which have no
+#     s390x templates.
 
 use strict;
 use warnings;
@@ -21,6 +25,7 @@ our $REPO_HANDLE = 's390x-port';
 our $REPO_NAME = 'Proxmox VE s390x port';
 our $KEYRING = '/usr/share/keyrings/proxport-archive-keyring.gpg';
 our $ORIGIN = 'proxport';
+our $APLINFO_FILE = 'aplinfo-pve-9-s390x.dat';
 
 sub is_s390x {
     return PVE::Tools::get_host_arch() eq 's390x';
@@ -81,6 +86,27 @@ sub standard_repository {
         description => "The repository of the Proxmox VE port to s390x (IBM Z, LinuxONE), with"
             . " the packages built for s390x. It is configured by the installer.",
         defined($repo) ? (status => $repo->{enabled}) : (),
+    };
+}
+
+# The template index (aplinfo source, see PVE::APLInfo) of the port's enabled repository, or undef.
+sub aplinfo_source {
+    my $info = eval {
+        require Proxmox::RS::APT::Repositories;
+        Proxmox::RS::APT::Repositories::repositories("pve");
+    };
+    if (my $err = $@) {
+        warn "unable to read the APT repositories - $err";
+        return undef;
+    }
+    my $repo = find_repository($info);
+    return undef if !$repo || !$repo->{enabled} || $repo->{uri} !~ m|^https?://|;
+
+    return {
+        host => $REPO_HANDLE, # the name of the cached index in the apl-info directory
+        url => "$repo->{uri}/images",
+        file => $APLINFO_FILE,
+        keyring => $repo->{keyring},
     };
 }
 
