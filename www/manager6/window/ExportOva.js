@@ -9,6 +9,35 @@ Ext.define('PVE.window.ExportOva', {
     isCreate: true,
     width: 450,
 
+    // The OVA includes the media loaded in the tape drives unless unchecked. Only the
+    // non-default is sent.
+    getValues: function () {
+        let me = this;
+        let values = me.callParent(arguments);
+        if (!me.down('field[name=include-media]').getValue()) {
+            values['include-media'] = 0;
+        }
+        return values;
+    },
+
+    // the media in the tape drives of the VM (s390x), e.g. ['tape0: local:import/install.aws']
+    showMedia: function (conf) {
+        let me = this;
+        let media = Object.keys(conf)
+            .filter((key) => key.match(/^tape\d+$/))
+            .sort()
+            .map((key) => [key, PVE.Parser.parsePropertyString(conf[key], 'file').file])
+            .filter(([, file]) => file && file !== 'none')
+            .map(([key, file]) => `${key}: ${file}`);
+        let field = me.down('#media');
+        field.setValue(
+            media.length
+                ? media.map((text) => Ext.htmlEncode(text)).join('<br>')
+                : Ext.htmlEncode(gettext('No tape loaded')),
+        );
+        field.setHidden(false);
+    },
+
     initComponent: function () {
         let me = this;
 
@@ -58,8 +87,34 @@ Ext.define('PVE.window.ExportOva', {
                     ['raw', 'Raw disk image (raw)'],
                 ],
             },
+            {
+                xtype: 'proxmoxcheckbox',
+                name: 'include-media',
+                fieldLabel: gettext('Include loaded tape media'),
+                checked: true,
+                submitValue: false, // see getValues()
+            },
+            {
+                xtype: 'displayfield',
+                itemId: 'media',
+                fieldLabel: gettext('Loaded media'),
+                hidden: true,
+            },
         ];
 
         me.callParent();
+
+        Proxmox.Utils.API2Request({
+            url: `/nodes/${me.nodename}/qemu/${me.vmid}/config`,
+            method: 'GET',
+            failure: () => {
+                // nothing to show, the export reports problems of the config itself
+            },
+            success: ({ result: { data } }) => {
+                if (!me.isDestroyed) {
+                    me.showMedia(data);
+                }
+            },
+        });
     },
 });
