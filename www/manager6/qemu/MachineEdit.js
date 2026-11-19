@@ -63,11 +63,16 @@ Ext.define('PVE.qemu.MachineInputPanel', {
             }
             let store = me.lookup('version').getStore();
             store.clearFilter();
+            // a mainframe machine type's versions have its (family) type, e.g. czam-v1 of czam;
+            // its own entry is the alias of the newest version: "Latest". Older qemu-server
+            // versions gave each version its own type, so its name prefix counts too.
             store.addFilter(
                 mainframe
                     ? (val) =>
                           val.data.id === 'latest' ||
-                          (val.data.class === 'mainframe' && val.data.id.startsWith(`${type}-`))
+                          (val.data.class === 'mainframe' &&
+                              val.data.id !== type &&
+                              (val.data.type === type || val.data.id.startsWith(`${type}-`)))
                     : (val) => val.data.id === 'latest' || val.data.type === type,
             );
             store.isWindows = me.getView().isWindows;
