@@ -828,10 +828,14 @@ Ext.define('PVE.qemu.HardwareView', {
                 me.down('#addNetboot').setDisabled(
                     noVMConfigCDROMPerm || !!me.getObjectValue('netboot', undefined, true),
                 );
-                // cloud-init is for Linux guests
+                // OS-type rules: cloud-init, the VirtIO consoles (serial ports) and the VirtIO
+                // RNG are for Linux guests only, whatever the machine class
                 let ostype = me.getObjectValue('ostype', undefined, true);
                 let linux = PVE.qemu.Architecture.isS390xLinux(ostype);
                 me.down('#addCloudinitDrive').setHidden(!linux);
+                let virtio = PVE.qemu.Architecture.hasS390xVirtioDrivers(ostype);
+                me.down('#addSerial').setHidden(!virtio);
+                me.down('#addRng').setHidden(!virtio);
             }
 
             // s390x: only the VirtIO disks and network devices can be hot-plugged, the

@@ -171,12 +171,19 @@ Ext.define('PVE.qemu.Architecture', {
         return [match[1] ?? '0', match[2].toLowerCase().padStart(4, '0')];
     },
 
-    // On s390x, the machine class decides which devices a VM can have, the OS type only the
-    // defaults: Linux guests get virtio-ccw devices and the firmware boot order, other (mainframe)
-    // OSes, also when unset, the mainframe devices and IPL settings. Exceptions: the disks of
-    // mainframe OSes are DASDs only, and they get no cloud-init drive.
+    // On s390x, the machine class decides which devices a VM can have (CD/DVD drives only on the
+    // virtio machine), the OS type picks the defaults: Linux guests get virtio-ccw devices and
+    // the firmware boot order, other (mainframe) OSes, also when unset, the mainframe devices and
+    // IPL settings. OS-type rules on top: mainframe OSes get DASDs as disks only, no cloud-init
+    // drive and no VirtIO devices (see hasS390xVirtioDrivers()).
     isS390xLinux: function (ostype) {
         return ostype === 'l24' || ostype === 'l26';
+    },
+
+    // An OS-type rule: only Linux guests have drivers for VirtIO NICs, consoles (serial ports)
+    // and the VirtIO RNG; mainframe operating systems do not get them offered.
+    hasS390xVirtioDrivers: function (ostype) {
+        return PVE.qemu.Architecture.isS390xLinux(ostype);
     },
 
     // The s390x machine types of a node, from the machine type API: the versions of the virtio

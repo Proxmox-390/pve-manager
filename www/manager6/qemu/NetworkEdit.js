@@ -75,12 +75,23 @@ Ext.define('PVE.qemu.NetworkInputPanel', {
         me.bridgesel.setNodename(nodename);
     },
 
-    // The NIC models depend on the architecture.
+    // The NIC models depend on the architecture, and on s390x on the OS type too.
     setArch: function (arch) {
         let me = this;
         me.arch = arch;
+        me.updateModels();
+    },
+
+    setOstype: function (ostype) {
+        let me = this;
+        me.ostype = ostype;
+        me.updateModels();
+    },
+
+    updateModels: function () {
+        let me = this;
         let selector = me.down('pveNetworkCardSelector');
-        selector.setArchitecture(me.arch, me.configuredModel);
+        selector.setArchitecture(me.arch, me.ostype, me.configuredModel);
         // the selector may change its value before its binding is set up (creation wizard)
         me.getViewModel().set('networkModel', selector.getValue());
     },
@@ -318,6 +329,7 @@ Ext.define('PVE.qemu.NetworkEdit', {
                 var i, confid;
                 me.vmconfig = response.result.data;
                 let arch = PVE.qemu.Architecture.getGuestArchitecture(me.vmconfig.arch, nodename);
+                ipanel.ostype = me.vmconfig.ostype;
                 if (!me.isCreate) {
                     let value = me.vmconfig[me.confid];
                     let network = PVE.Parser.parseQemuNetwork(me.confid, value);

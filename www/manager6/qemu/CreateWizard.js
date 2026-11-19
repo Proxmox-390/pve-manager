@@ -384,6 +384,7 @@ Ext.define('PVE.qemu.CreateWizard', {
             bind: {
                 nodename: '{nodename}',
                 arch: '{current.architecture}',
+                ostype: '{current.ostype}',
             },
             title: gettext('Network'),
             insideWizard: true,
