@@ -102,53 +102,47 @@ Ext.define('PVE.window.GuestImport', {
             });
         },
 
-        // s390x: an OVA is extracted to its working storage, which qemu-server accepts only if it
-        // is file based and has the 'images' content type. Without a choice, that is the source
-        // storage, which the 'local' storage of s390x installs is not (no 'images'). Then a usable
-        // one is preselected: the default (target) storage if it is usable, else the first one.
+        // s390x: an OVA is extracted to its working storage, which qemu-server accepts if it is
+        // file based (a path), with the 'images' content type for a live import. Left empty, the
+        // recommended default, that is the storage of the OVA itself. The selector offers only
+        // the storages qemu-server accepts, not the LVM, ZFS or RBD storages with 'images'.
         fileBasedStorageTypes: ['dir', 'nfs', 'cifs', 'btrfs', 'cephfs', 'glusterfs'],
 
-        isUsableWorkingStorage: function (storage) {
+        isUsableWorkingStorage: function (storage, live) {
             let me = this;
             return (
                 !!storage &&
                 me.fileBasedStorageTypes.includes(storage.type) &&
-                (storage.content ?? '').split(',').includes('images')
+                (!live || (storage.content ?? '').split(',').includes('images'))
             );
         },
 
-        loadWorkingStorages: function () {
-            let me = this;
-            let view = me.getView();
-            Proxmox.Utils.API2Request({
-                url: `/nodes/${view.nodename}/storage`,
-                method: 'GET',
-                success: function ({ result }) {
-                    if (view.destroyed) {
-                        return;
-                    }
-                    me.storages = result.data ?? [];
-                    let source = me.storages.find((s) => s.storage === view.storage);
-                    me.autoWorkingStorage = !me.isUsableWorkingStorage(source);
-                    if (me.autoWorkingStorage) {
-                        // qemu-server picks one itself if there is none to preselect
-                        me.lookup('extractionStorage').setEmptyText(Proxmox.Utils.defaultText);
-                        me.selectWorkingStorage();
-                    }
-                },
-            });
-        },
-
-        selectWorkingStorage: function () {
+        setupWorkingStorages: function () {
             let me = this;
             let field = me.lookup('extractionStorage');
-            if (!me.autoWorkingStorage || !me.storages || field.isDisabled()) {
-                return;
+            field.setEmptyText(gettext('Source Storage (recommended)'));
+            // any content type: the default 'images' filter would list LVM/ZFS, not 'local'
+            field.storageContent = undefined;
+            let nodename = field.nodename;
+            field.nodename = undefined;
+            field.setNodename(nodename);
+            me.filterWorkingStorages();
+        },
+
+        filterWorkingStorages: function () {
+            let me = this;
+            let field = me.lookup('extractionStorage');
+            let live = !!me.lookup('liveimport').getValue();
+            let store = field.getStore();
+            store.removeFilter('s390x-working-storage', true);
+            store.addFilter({
+                id: 's390x-working-storage',
+                filterFn: (rec) => me.isUsableWorkingStorage(rec.data, live),
+            });
+            let value = field.getValue();
+            if (value && !store.findRecord('storage', value, 0, false, true, true)) {
+                field.setValue(''); // not usable for a live import
             }
-            let target = me.lookup('defaultStorage').down('field[name=hdstorage]').getValue();
-            let usable = me.storages.filter((s) => me.isUsableWorkingStorage(s));
-            let choice = usable.find((s) => s.storage === target) ?? usable[0];
-            field.setValue(choice?.storage ?? '');
         },
 
         onOSBaseChange: function (_field, value) {
@@ -378,13 +372,11 @@ Ext.define('PVE.window.GuestImport', {
             'proxmoxcheckbox[name=uniqueMACs]': {
                 change: 'onUniqueMACChange',
             },
-            'pveDiskStorageSelector[reference=defaultStorage] field[name=hdstorage]': {
-                change: 'selectWorkingStorage',
-            },
-            'pveStorageSelector[reference=extractionStorage]': {
-                // a storage the user chose is kept
-                select: function () {
-                    this.autoWorkingStorage = false;
+            'proxmoxcheckbox[reference=liveimport]': {
+                change: function () {
+                    if (this.getViewModel().get('s390xOva')) {
+                        this.filterWorkingStorages();
+                    }
                 },
             },
         },
@@ -1335,8 +1327,13 @@ Ext.define('PVE.window.GuestImport', {
                 let isOva = data.warnings.map((w) => w.type).indexOf('ova-needs-extracting') !== -1;
                 me.getViewModel().set('isOva', isOva);
                 if (isOva && arch === 's390x') {
-                    me.getViewModel().notify(); // enables the working storage selector
-                    me.getController().loadWorkingStorages();
+                    me.getViewModel().set('s390xOva', true);
+                    me.getController().setupWorkingStorages();
+                }
+                // s390x: an OVA or OVF is a copy of a VM (e.g. one exported with 'qm export-ova'
+                // that still runs): new MAC addresses by default, as qemu-server does
+                if (arch === 's390x' && /\.ov[af]$/i.test(me.volumeName)) {
+                    me.down('proxmoxcheckbox[name=uniqueMACs]').setValue(true);
                 }
 
                 // the CPU types and the default one of the node's architecture, e.g. 'host' on
