@@ -95,6 +95,55 @@ Ext.define('PVE.window.GuestImport', {
             });
         },
 
+        // s390x: an OVA is extracted to its working storage, which qemu-server accepts only if it
+        // is file based and has the 'images' content type. Without a choice, that is the source
+        // storage, which the 'local' storage of s390x installs is not (no 'images'). Then a usable
+        // one is preselected: the default (target) storage if it is usable, else the first one.
+        fileBasedStorageTypes: ['dir', 'nfs', 'cifs', 'btrfs', 'cephfs', 'glusterfs'],
+
+        isUsableWorkingStorage: function (storage) {
+            let me = this;
+            return (
+                !!storage &&
+                me.fileBasedStorageTypes.includes(storage.type) &&
+                (storage.content ?? '').split(',').includes('images')
+            );
+        },
+
+        loadWorkingStorages: function () {
+            let me = this;
+            let view = me.getView();
+            Proxmox.Utils.API2Request({
+                url: `/nodes/${view.nodename}/storage`,
+                method: 'GET',
+                success: function ({ result }) {
+                    if (view.destroyed) {
+                        return;
+                    }
+                    me.storages = result.data ?? [];
+                    let source = me.storages.find((s) => s.storage === view.storage);
+                    me.autoWorkingStorage = !me.isUsableWorkingStorage(source);
+                    if (me.autoWorkingStorage) {
+                        // qemu-server picks one itself if there is none to preselect
+                        me.lookup('extractionStorage').setEmptyText(Proxmox.Utils.defaultText);
+                        me.selectWorkingStorage();
+                    }
+                },
+            });
+        },
+
+        selectWorkingStorage: function () {
+            let me = this;
+            let field = me.lookup('extractionStorage');
+            if (!me.autoWorkingStorage || !me.storages || field.isDisabled()) {
+                return;
+            }
+            let target = me.lookup('defaultStorage').down('field[name=hdstorage]').getValue();
+            let usable = me.storages.filter((s) => me.isUsableWorkingStorage(s));
+            let choice = usable.find((s) => s.storage === target) ?? usable[0];
+            field.setValue(choice?.storage ?? '');
+        },
+
         onOSBaseChange: function (_field, value) {
             let me = this;
             let ostype = me.lookup('ostype');
@@ -321,6 +370,15 @@ Ext.define('PVE.window.GuestImport', {
             },
             'proxmoxcheckbox[name=uniqueMACs]': {
                 change: 'onUniqueMACChange',
+            },
+            'pveDiskStorageSelector[reference=defaultStorage] field[name=hdstorage]': {
+                change: 'selectWorkingStorage',
+            },
+            'pveStorageSelector[reference=extractionStorage]': {
+                // a storage the user chose is kept
+                select: function () {
+                    this.autoWorkingStorage = false;
+                },
             },
         },
     },
@@ -1114,6 +1172,7 @@ Ext.define('PVE.window.GuestImport', {
             success: function (response) {
                 let data = response.result.data;
                 me.vmConfig = data['create-args'];
+                let arch = PVE.qemu.Architecture.getNodeArchitecture(me.nodename);
 
                 let disks = [];
                 for (const [id, value] of Object.entries(data.disks ?? {})) {
@@ -1179,14 +1238,15 @@ Ext.define('PVE.window.GuestImport', {
                     'warnings',
                     data.warnings.map((w) => renderWarning(w)),
                 );
-                me.getViewModel().set(
-                    'isOva',
-                    data.warnings.map((w) => w.type).indexOf('ova-needs-extracting') !== -1,
-                );
+                let isOva = data.warnings.map((w) => w.type).indexOf('ova-needs-extracting') !== -1;
+                me.getViewModel().set('isOva', isOva);
+                if (isOva && arch === 's390x') {
+                    me.getViewModel().notify(); // enables the working storage selector
+                    me.getController().loadWorkingStorages();
+                }
 
                 // the CPU types and the default one of the node's architecture, e.g. 'host' on
                 // s390x; the x86 default stays the GUI's explicit x86-64-v2-AES
-                let arch = PVE.qemu.Architecture.getNodeArchitecture(me.nodename);
                 if (arch !== 'x86_64') {
                     let cputype = me.lookup('cputype');
                     cputype.setArch(arch);
