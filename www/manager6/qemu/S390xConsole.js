@@ -10,12 +10,18 @@
 //
 // The config panel creates this panel each time its Console entry is selected (and destroys it
 // when another one is), so the panel loads the consoles of the VM itself.
+//
+// While the VM is not running, the terminal tabs show that, with a button to start it, instead of
+// an empty terminal; the line-mode console keeps showing its log.
 Ext.define('PVE.qemu.S390xConsole', {
     extend: 'Ext.tab.Panel',
     alias: 'widget.pveQemuS390xConsole',
 
     nodename: undefined,
     vmid: undefined,
+    // the status/current store of the VM (the config panel's), else the panel polls its own
+    statusStore: undefined,
+    vmRunning: undefined, // unknown until the status is loaded
 
     border: false,
     // render all tabs right away, so a tab can always load its console when it gets shown
@@ -34,6 +40,17 @@ Ext.define('PVE.qemu.S390xConsole', {
         me.items = [];
 
         me.callParent();
+
+        if (!me.statusStore) {
+            me.statusStore = Ext.create('Proxmox.data.ObjectStore', {
+                url: `/api2/json/nodes/${me.nodename}/qemu/${me.vmid}/status/current`,
+                interval: 3000,
+            });
+            me.statusStore.startUpdate();
+            me.on('destroy', () => me.statusStore.stopUpdate());
+        }
+        me.mon(me.statusStore, 'load', () => me.updateRunning());
+        me.updateRunning();
 
         me.on('tabchange', (_panel, newTab, oldTab) => {
             me.unloadConsole(oldTab);
@@ -79,9 +96,9 @@ Ext.define('PVE.qemu.S390xConsole', {
                           title: text,
                           serial,
                           model3270: model,
-                          layout: 'fit',
+                          layout: 'card',
                           border: false,
-                          items: [{ xtype: 'uxiframe', itemId: 'frame' }],
+                          items: [{ xtype: 'uxiframe', itemId: 'frame' }, me.stoppedItem()],
                       },
             ),
         );
@@ -90,6 +107,72 @@ Ext.define('PVE.qemu.S390xConsole', {
             me.setActiveTab(0);
         }
         me.loadConsole(me.getActiveTab());
+    },
+
+    // shown in a terminal tab while the VM is not running
+    stoppedItem: function () {
+        let me = this;
+        let caps = Ext.state.Manager.get('GuiCap');
+        return {
+            itemId: 'stopped',
+            xtype: 'container',
+            layout: {
+                type: 'vbox',
+                align: 'center',
+                pack: 'center',
+            },
+            items: [
+                {
+                    xtype: 'component',
+                    padding: 10,
+                    style: { fontSize: '14px' },
+                    html: Ext.htmlEncode(
+                        Ext.String.format(gettext('VM {0} is not running'), me.vmid),
+                    ),
+                },
+                {
+                    xtype: 'button',
+                    text: gettext('Start Now'),
+                    iconCls: 'fa fa-play',
+                    hidden: !caps?.vms['VM.PowerMgmt'],
+                    handler: function (button) {
+                        button.disable();
+                        Proxmox.Utils.API2Request({
+                            url: `/nodes/${me.nodename}/qemu/${me.vmid}/status/start`,
+                            method: 'POST',
+                            failure: function (response) {
+                                button.enable();
+                                Ext.Msg.alert(gettext('Error'), response.htmlStatus);
+                            },
+                            success: () => button.enable(),
+                        });
+                    },
+                },
+            ],
+        };
+    },
+
+    // follow the status of the VM: connect the terminal tab shown when it runs, else show that
+    // it does not
+    updateRunning: function () {
+        let me = this;
+        let status = me.statusStore.getById('status')?.data.value;
+        if (status === undefined) {
+            return; // not loaded yet
+        }
+        let running = status === 'running';
+        if (running === me.vmRunning) {
+            return;
+        }
+        me.vmRunning = running;
+        let tab = me.getActiveTab();
+        if (!running) {
+            me.unloadConsole(tab);
+            me.items.each((item) => item.down('#stopped') && item.getLayout().setActiveItem(1));
+        } else {
+            me.items.each((item) => item.down('#stopped') && item.getLayout().setActiveItem(0));
+            me.loadConsole(tab);
+        }
     },
 
     consoleUrl: function (serial, model) {
@@ -122,11 +205,18 @@ Ext.define('PVE.qemu.S390xConsole', {
             tab.on('afterrender', () => me.loadConsole(tab), me, { single: true });
             return;
         }
-        tab.consoleLoaded = true;
         if (tab.isSclpLineModeConsole) {
+            tab.consoleLoaded = true;
             tab.connect();
             return;
         }
+        if (!me.vmRunning) {
+            // the status tells when to connect
+            tab.getLayout().setActiveItem(me.vmRunning === false ? 1 : 0);
+            return;
+        }
+        tab.consoleLoaded = true;
+        tab.getLayout().setActiveItem(0);
         let frame = tab.down('#frame');
         frame.load(me.consoleUrl(tab.serial, tab.model3270));
         frame.focus();

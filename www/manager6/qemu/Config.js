@@ -340,6 +340,8 @@ Ext.define('PVE.qemu.Config', {
                 vmid: vmid,
                 consoleType: 'kvm',
                 nodename: nodename,
+                // s390x: the console panel shows whether the VM runs
+                ...(s390x ? { statusStore: me.statusStore } : {}),
             });
         }
 
