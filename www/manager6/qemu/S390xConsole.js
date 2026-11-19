@@ -1,7 +1,9 @@
 // The console panel of an s390x VM. These have no VGA display; qemu-server attaches SCLP and 3270
 // consoles to them depending on the OS type, and the configured 3270 terminals. Each console gets
 // a tab with xterm.js, connected while the tab is shown: a hidden tab does not keep a session (the
-// SCLP consoles take one client at a time), and showing it again reconnects.
+// SCLP consoles take one client at a time), and showing it again reconnects. Nothing is lost when
+// a tab or the panel is left (the 3270 sessions persist on the host, the SCLP consoles stay with
+// the VM), so xterm.js must not ask whether to leave its page then.
 //
 // The config panel creates this panel each time its Console entry is selected (and destroys it
 // when another one is), so the panel loads the consoles of the VM itself.
@@ -85,6 +87,7 @@ Ext.define('PVE.qemu.S390xConsole', {
             node: me.nodename,
             serial,
             resize: Ext.state.Manager.getProvider().get('novnc-scaling', 'scale'),
+            'unload-prompt': 0,
         };
         return '/?' + Ext.Object.toQueryString(query);
     },
