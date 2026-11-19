@@ -639,6 +639,13 @@ Ext.define('PVE.window.GuestImport', {
                                 hidden: '{!isOva}',
                             },
                         },
+                        {
+                            // s390x: the tape media of an OVA are imported as ISO images there
+                            xtype: 'displayfield',
+                            reference: 'mediaStorage',
+                            fieldLabel: gettext('Tape Media Storage'),
+                            hidden: true,
+                        },
                     ],
 
                     columnB: [
@@ -1184,6 +1191,22 @@ Ext.define('PVE.window.GuestImport', {
                 });
 
                 me.lookup('prepareForVirtIO').setValue(prepareForVirtIO);
+
+                // s390x: the media of the tape drives (create-args, passed on as they are), which
+                // get imported to 'media-storage'
+                let media = Object.entries(me.vmConfig)
+                    .filter(([key, value]) => key.match(/^tape\d+$/) && /import-from=/.test(value))
+                    .map(([key, value]) => {
+                        let from = PVE.Parser.parsePropertyString(value, 'file')['import-from'];
+                        return `${key}: ${from.replace(/^.*\//, '')}`;
+                    });
+                if (media.length && data['media-storage']) {
+                    let field = me.lookup('mediaStorage');
+                    field.setValue(
+                        Ext.htmlEncode(`${data['media-storage']} (${media.join(', ')})`),
+                    );
+                    field.setHidden(false);
+                }
             },
         });
     },
