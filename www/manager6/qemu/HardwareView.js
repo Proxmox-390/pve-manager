@@ -401,9 +401,10 @@ Ext.define('PVE.qemu.HardwareView', {
             visible: false,
         };
 
-        // s390x has no BIOS choice, display, SCSI controller choice, EFI disk or TPM
+        // s390x has no BIOS choice, display, SCSI controller choice, EFI disk or TPM, and only
+        // runs s390x guests: no foreign vCPU architecture, whatever the config says
         if (isS390x) {
-            for (const key of ['bios', 'vga', 'scsihw', 'efidisk0', 'tpmstate0']) {
+            for (const key of ['bios', 'vga', 'scsihw', 'efidisk0', 'tpmstate0', 'arch']) {
                 rows[key] = { visible: false };
             }
         }
