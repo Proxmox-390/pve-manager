@@ -76,7 +76,9 @@ Ext.define('PVE.qemu.TerminalEdit', {
                         me.close();
                         return;
                     }
-                } else {
+                }
+                ipanel.down('pveCcwDevnoField').setConfId(ipanel.confid);
+                if (!me.isCreate) {
                     let terminal = PVE.Parser.parsePropertyString(data[me.confid], 'devno');
                     ipanel.setValues({
                         devno: terminal.devno,

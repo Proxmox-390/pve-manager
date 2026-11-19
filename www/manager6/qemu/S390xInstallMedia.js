@@ -96,6 +96,7 @@ Ext.define('PVE.qemu.TapeInputPanel', {
         let field = me.down('field[name=confid]');
         if (free) {
             field.setValue(free);
+            me.down('pveCcwDevnoField').setConfId(free);
         } else {
             field.markInvalid(gettext('All tape drives are in use'));
         }
@@ -160,6 +161,7 @@ Ext.define('PVE.qemu.TapeInputPanel', {
                 xtype: 'pveCcwDevnoField',
                 name: 'devno',
                 kind: 'tape',
+                confid: me.confid,
                 nodename: me.nodename,
                 autoSuggest: !me.confid, // an existing drive shows its address
             },
@@ -535,6 +537,7 @@ Ext.define('PVE.qemu.S390xInstallMediaPanel', {
             xtype: 'pveCcwDevnoField',
             name: 'tapedevno',
             kind: 'tape',
+            confid: 'tape0',
             autoSuggest: false, // a new VM, the tape range starts there
             value: PVE.qemu.S390xMedia.defaultTapeDevno('tape0'),
             bind: {

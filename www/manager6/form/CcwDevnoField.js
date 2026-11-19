@@ -11,6 +11,10 @@
 //   autoSuggest: fill in the suggestion when the field is empty (default true); call
 //       suggest() to (re)load it explicitly, e.g. after setting the vmid
 //   count: the consecutive device numbers the device(s) use from this one (qeth: 3)
+//   confid: the config key of the device (e.g. 'net0'), or a RegExp of the keys of the devices
+//       (e.g. /^terminal\d+$/): API parameter errors of it are shown at this field, see
+//       markApiErrors(); edit windows show those of a key already (Ext.form.Basic.findField()
+//       also finds a field by its dataIndex)
 //
 // In the creation wizard, the device numbers of the other address fields of the wizard count as
 // used too: the suggestion skips them and the field is invalid if it overlaps one.
@@ -33,6 +37,24 @@ Ext.define('PVE.form.CcwDevnoField', {
             }
             return res;
         },
+
+        // Show the API parameter errors of CCW devices at their address fields in 'container'.
+        // Returns the fields marked.
+        markApiErrors: function (container, errors) {
+            let marked = [];
+            for (const [key, message] of Object.entries(errors ?? {})) {
+                let field = container
+                    .query('pveCcwDevnoField')
+                    .find((f) => !f.isDisabled() && f.matchesConfId(key));
+                if (field) {
+                    // keep it while the address is the same, also when validated again
+                    field.apiError = { value: field.getValue(), message };
+                    field.validate();
+                    marked.push(field);
+                }
+            }
+            return marked;
+        },
     },
 
     fieldLabel: gettext('Address'),
@@ -45,6 +67,18 @@ Ext.define('PVE.form.CcwDevnoField', {
     getUsedDevnos: undefined,
     autoSuggest: true,
     count: 1,
+    confid: undefined,
+
+    setConfId: function (confid) {
+        let me = this;
+        me.confid = confid;
+        me.dataIndex = typeof confid === 'string' ? confid : undefined;
+    },
+
+    matchesConfId: function (key) {
+        let me = this;
+        return me.confid instanceof RegExp ? me.confid.test(key) : me.confid === key;
+    },
 
     // the device numbers of the other address fields of the creation wizard
     getWizardDevnos: function () {
@@ -67,6 +101,9 @@ Ext.define('PVE.form.CcwDevnoField', {
 
     validator: function (value) {
         let me = this;
+        if (me.apiError && me.apiError.value === value) {
+            return me.apiError.message;
+        }
         let used = me.getWizardDevnos();
         let own = PVE.form.CcwDevnoField.expand(value, me.count);
         if (own.some((devno) => used.includes(devno))) {
@@ -129,6 +166,7 @@ Ext.define('PVE.form.CcwDevnoField', {
     initComponent: function () {
         let me = this;
         me.callParent();
+        me.setConfId(me.confid);
         if (me.autoSuggest && !me.getValue()) {
             me.suggest();
         }

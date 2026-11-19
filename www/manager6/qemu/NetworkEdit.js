@@ -56,6 +56,7 @@ Ext.define('PVE.qemu.NetworkInputPanel', {
         var me = this;
 
         me.confid = confid;
+        me.down('pveCcwDevnoField[name=devno]').setConfId(confid);
 
         if (data) {
             data.networkmode = data.bridge ? 'bridge' : 'nat';
@@ -198,12 +199,37 @@ Ext.define('PVE.qemu.NetworkInputPanel', {
                 name: 'devno',
                 kind: 'qeth',
                 count: 3,
+                confid: me.confid,
                 nodename: me.nodename,
                 hidden: true,
                 disabled: true,
                 bind: {
                     hidden: '{!isQeth}',
                     disabled: '{!isQeth}',
+                },
+                listeners: {
+                    change: function (field, value) {
+                        let devnos = PVE.form.CcwDevnoField.expand(value, 3);
+                        let range = devnos.length === 3 ? `${devnos[0]}-${devnos[2]}` : '';
+                        field.up('inputpanel').down('#qethDevnos').setValue(range);
+                    },
+                },
+            },
+            {
+                // the read, write and data devices of the adapter, from the address
+                xtype: 'displayfield',
+                itemId: 'qethDevnos',
+                fieldLabel: gettext('Devices'),
+                submitValue: false,
+                hidden: true,
+                bind: {
+                    hidden: '{!isQeth}',
+                },
+                autoEl: {
+                    tag: 'div',
+                    'data-qtip': gettext(
+                        'A qeth adapter has three devices at consecutive addresses: read, write and data',
+                    ),
                 },
             },
             {

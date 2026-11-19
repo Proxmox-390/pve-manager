@@ -151,6 +151,31 @@ Ext.define('PVE.qemu.CreateWizard', {
         }
     },
 
+    // s390x: show the API errors of CCW device addresses (e.g. overlapping ones) at their fields,
+    // and the tab of the first one
+    showDevnoErrors: function (errors) {
+        let me = this;
+        let [field] = PVE.form.CcwDevnoField.markApiErrors(me, errors);
+        if (!field) {
+            return;
+        }
+        let tabpanel = me.down('tabpanel');
+        let tab = tabpanel.items.findBy((item) => field.isDescendantOf(item));
+        if (tab) {
+            tabpanel.setActiveTab(tab);
+        }
+        // a disk of the disk tab: show its card
+        let disk = field.up('pveQemuHDInputPanel');
+        let disks = disk?.up('pveMultiHDPanel');
+        if (disks) {
+            let grid = disks.lookup('grid');
+            let rec = grid.getStore().findRecord('itemId', disk.itemId, 0, false, true, true);
+            if (rec) {
+                grid.getSelectionModel().select(rec);
+            }
+        }
+    },
+
     setArchitecture: function () {
         let me = this;
         let vm = me.getViewModel();
@@ -469,6 +494,7 @@ Ext.define('PVE.qemu.CreateWizard', {
                         wizard.close();
                     },
                     failure: function (response, opts) {
+                        wizard.showDevnoErrors(response.result?.errors);
                         Ext.Msg.alert(gettext('Error'), response.htmlStatus);
                     },
                 });

@@ -55,6 +55,7 @@ Ext.define('PVE.qemu.HDInputPanel', {
 
         fireIdChange: function () {
             let view = this.getView();
+            view.dasdFields?.down('pveCcwDevnoField').setConfId(view.bussel.getConfId());
             view.fireEvent('diskidchange', view, view.bussel.getConfId());
         },
 
@@ -83,6 +84,7 @@ Ext.define('PVE.qemu.HDInputPanel', {
                 vm.set('isSCSI', view.confid.match(/^scsi/));
                 vm.set('isVirtIO', view.confid.match(/^virtio/));
                 this.setDASDKind(view.confid);
+                view.dasdFields?.down('pveCcwDevnoField').setConfId(view.confid);
             }
         },
     },

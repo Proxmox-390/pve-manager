@@ -162,6 +162,7 @@ Ext.define('PVE.qemu.SystemInputPanel', {
             fieldLabel: gettext('First Address'),
             kind: '3270',
             count: 0,
+            confid: /^terminal\d+$/,
             autoSuggest: false, // a new VM, the 3270 range starts there
             value: '0.0.0700',
             hidden: true,
