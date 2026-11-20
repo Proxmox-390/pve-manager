@@ -60,6 +60,14 @@ Ext.define('PVE.panel.GuestStatusView', {
                 var _me = this;
                 var text = record.data.status;
                 var qmpstatus = record.data.qmpstatus;
+                // s390x: a disabled wait (QEMU reports it as a guest panic) is also how
+                // mainframe operating systems stop when they shut down: no crash
+                let disabledWait = record.data['disabled-wait'];
+                if (disabledWait) {
+                    return Ext.htmlEncode(
+                        `${text} (${PVE.Utils.render_disabled_wait(disabledWait)})`,
+                    );
+                }
                 if (qmpstatus && qmpstatus !== record.data.status) {
                     text += ' (' + qmpstatus + ')';
                 }
@@ -77,7 +85,20 @@ Ext.define('PVE.panel.GuestStatusView', {
             hidden: true,
             textField: 'panic-info',
             renderer: function (info) {
-                this.setVisible(!!info);
+                this.setVisible(!!info && !PVE.Utils.is_disabled_wait(info));
+                return PVE.Utils.render_guest_panic_info(info);
+            },
+        },
+        {
+            // s390x: the PSW of a disabled wait, see the status
+            itemId: 'disabledWait',
+            iconCls: 'fa fa-pause-circle-o fa-fw',
+            title: gettext('Disabled wait'),
+            printBar: false,
+            hidden: true,
+            textField: 'panic-info',
+            renderer: function (info) {
+                this.setVisible(PVE.Utils.is_disabled_wait(info));
                 return PVE.Utils.render_guest_panic_info(info);
             },
         },

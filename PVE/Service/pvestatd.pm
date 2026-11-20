@@ -339,6 +339,9 @@ sub update_qemu_status {
         my $d = $vmstatus->{$vmid};
         my $data;
         my $status = $d->{qmpstatus} || $d->{status} || 'stopped';
+        # s390x: QEMU reports a disabled wait as a guest panic, but mainframe operating systems
+        # also stop like that when they shut down
+        $status = 'disabled-wait' if $d->{'disabled-wait'};
         my $template = $d->{template} ? $d->{template} : "0";
 
         # TODO: drop old pve2.3- schema with PVE 10

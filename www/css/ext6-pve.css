@@ -161,6 +161,14 @@
     font-size: 0.6em;
 }
 
+/* s390x: a disabled wait (stopped by the guest, also how mainframe operating systems shut down) */
+.x-tree-icon-custom.disabled-wait:after,
+.x-grid-icon-custom.disabled-wait:after {
+    content: "\f04d";
+    color: #3892d4;
+    font-size: 0.6em;
+}
+
 /* the suspend symbol */
 .x-tree-icon-custom.suspended:after,
 .x-grid-icon-custom.suspended:after {

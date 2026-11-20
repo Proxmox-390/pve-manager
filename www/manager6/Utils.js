@@ -1085,6 +1085,23 @@ Ext.define('PVE.Utils', {
             return schema?.name ?? value;
         },
 
+        // s390x: whether the 'panic-info' of the QEMU VM status is a disabled wait, see
+        // render_disabled_wait()
+        is_disabled_wait: function (info) {
+            return info?.type === 's390' && info.reason === 'disabled-wait';
+        },
+
+        // s390x: the 'disabled-wait' of the QEMU VM status, the instruction address of the
+        // disabled wait PSW the guest loaded (16 hexadecimal digits): QEMU reports it as a guest
+        // panic, but mainframe operating systems also stop like that when they shut down, with a
+        // wait state code in the address. At least 8 digits, in upper case like on the mainframe.
+        render_disabled_wait: function (address) {
+            let addr = String(address ?? '')
+                .toUpperCase()
+                .replace(/^0+(?=[0-9A-F]{8})/, '');
+            return Ext.String.format(gettext('Disabled wait (PSW {0})'), addr);
+        },
+
         // the 'panic-info' of the QEMU VM status: crash information of the CPU that crashed
         render_guest_panic_info: function (info) {
             if (!info) {
