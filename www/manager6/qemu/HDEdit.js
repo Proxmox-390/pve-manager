@@ -51,6 +51,50 @@ Ext.define('PVE.qemu.HDInputPanel', {
                 let storage = storageSelector.getComponent('hdstorage');
                 storageSelector.changeStorage(storage, storage.getValue());
             }
+            if (kind) {
+                this.preselectDASDStorage();
+            }
+        },
+
+        // s390x: a new or imported DASD volume goes to block storage by default (see
+        // PVE.qemu.HDInputPanel.preferredDASDStorage()), unless the user chose a storage
+        preselectDASDStorage: function () {
+            let me = this;
+            let view = me.getView();
+            for (const reference of ['new-disk', 'import-target']) {
+                let field = view.lookup(reference)?.getComponent('hdstorage');
+                if (field) {
+                    me.hookDASDStorage(field);
+                }
+            }
+        },
+
+        // preselect the DASD storage in the storage field $field now and whenever its storages
+        // are (re)loaded, see preselectDASDStorage()
+        hookDASDStorage: function (field) {
+            let me = this;
+            let store = field.getStore();
+            if (!field.dasdStoragePreselect) {
+                field.dasdStoragePreselect = () => {
+                    if (field.destroyed || field.userSelectedStorage) {
+                        return;
+                    }
+                    if (!me.getViewModel().get('isDASD')) {
+                        return;
+                    }
+                    let storage = PVE.qemu.HDInputPanel.preferredDASDStorage(
+                        store.getRange().map((rec) => rec.data),
+                        field.getValue(),
+                    );
+                    if (storage && storage !== field.getValue()) {
+                        field.setValue(storage);
+                    }
+                };
+                me.mon(store, 'load', field.dasdStoragePreselect);
+            }
+            if (store.isLoaded()) {
+                field.dasdStoragePreselect();
+            }
         },
 
         fireIdChange: function () {
@@ -72,6 +116,11 @@ Ext.define('PVE.qemu.HDInputPanel', {
                 change: function (_field, value) {
                     this.getView().dasdFields?.setStorage(value);
                 },
+                // a storage the user chose is kept, see preselectDASDStorage()
+                select: function (field) {
+                    field.userSelectedStorage = true;
+                },
+                afterrender: 'hookDASDStorage',
             },
             'field[name=scsiController]': {
                 change: function (f, value) {
@@ -144,6 +193,28 @@ Ext.define('PVE.qemu.HDInputPanel', {
     },
 
     statics: {
+        // s390x: the storage for a new or imported DASD volume, of the storages $storages (the
+        // records of a storage selector) and the selected one $current. Volumes on block
+        // storage (ZFS zvols, LVM) perform much better than image files on a file system, and
+        // pve-qemu-kvm 11.1.90-1+s390x10 and later accept the padding block storages add to
+        // CKD volumes. So: a ZFS pool storage, else LVM-thin, else LVM; only without any of them
+        // a file based storage, the selected one if it is.
+        preferredDASDStorage: function (storages, current) {
+            let usable = (storages ?? []).filter((s) => s.enabled !== 0 && s.active !== 0);
+            for (const type of ['zfspool', 'lvmthin', 'lvm']) {
+                let found = usable.find((s) => s.type === type);
+                if (found) {
+                    return found.storage;
+                }
+            }
+            let fileBased = ['dir', 'nfs', 'cifs', 'cephfs', 'glusterfs', 'btrfs'];
+            let files = usable.filter((s) => fileBased.includes(s.type));
+            if (files.some((s) => s.storage === current)) {
+                return current;
+            }
+            return files[0]?.storage ?? current;
+        },
+
         // the disk images the import of a disk takes (not OVA/OVF appliances)
         isImportableImage: function (volume) {
             return ['qcow2', 'vmdk', 'raw'].includes(volume?.format);
