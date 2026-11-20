@@ -103,7 +103,7 @@ Ext.define('PVE.window.GuestImport', {
         },
 
         // s390x: an OVA is extracted to its working storage, which qemu-server accepts if it is
-        // file based (a path), with the 'images' content type for a live import. Left empty, the
+        // file based (a path), allowing VM disks ('images') for a live import. Left empty, the
         // recommended default, that is the storage of the OVA itself. The selector offers only
         // the storages qemu-server accepts, not the LVM, ZFS or RBD storages with 'images'.
         fileBasedStorageTypes: ['dir', 'nfs', 'cifs', 'btrfs', 'cephfs', 'glusterfs'],
@@ -113,7 +113,7 @@ Ext.define('PVE.window.GuestImport', {
             return (
                 !!storage &&
                 me.fileBasedStorageTypes.includes(storage.type) &&
-                (!live || (storage.content ?? '').split(',').includes('images'))
+                (!live || PVE.Utils.contentAllows(storage.content ?? '', 'vm-vol'))
             );
         },
 
