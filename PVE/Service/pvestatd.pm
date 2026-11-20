@@ -340,7 +340,8 @@ sub update_qemu_status {
         my $data;
         my $status = $d->{qmpstatus} || $d->{status} || 'stopped';
         # s390x: QEMU reports a disabled wait as a guest panic, but mainframe operating systems
-        # also stop like that when they shut down
+        # also stop like that when they shut down. qemu-server sets 'disabled-wait' only for
+        # guests that are not Linux, a Linux kernel panic stays 'guest-panicked'.
         $status = 'disabled-wait' if $d->{'disabled-wait'};
         my $template = $d->{template} ? $d->{template} : "0";
 

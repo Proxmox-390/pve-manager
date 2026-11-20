@@ -83,9 +83,10 @@ Ext.define('PVE.panel.GuestStatusView', {
             title: gettext('Guest panicked'),
             printBar: false,
             hidden: true,
-            textField: 'panic-info',
-            renderer: function (info) {
-                this.setVisible(!!info && !PVE.Utils.is_disabled_wait(info));
+            multiField: true,
+            renderer: function (record) {
+                let info = record.data['panic-info'];
+                this.setVisible(!!info && !PVE.Utils.is_disabled_wait(record.data));
                 return PVE.Utils.render_guest_panic_info(info);
             },
         },
@@ -96,9 +97,10 @@ Ext.define('PVE.panel.GuestStatusView', {
             title: gettext('Disabled wait'),
             printBar: false,
             hidden: true,
-            textField: 'panic-info',
-            renderer: function (info) {
-                this.setVisible(PVE.Utils.is_disabled_wait(info));
+            multiField: true,
+            renderer: function (record) {
+                let info = record.data['panic-info'];
+                this.setVisible(!!info && PVE.Utils.is_disabled_wait(record.data));
                 return PVE.Utils.render_guest_panic_info(info);
             },
         },

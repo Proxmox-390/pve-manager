@@ -1085,10 +1085,11 @@ Ext.define('PVE.Utils', {
             return schema?.name ?? value;
         },
 
-        // s390x: whether the 'panic-info' of the QEMU VM status is a disabled wait, see
-        // render_disabled_wait()
-        is_disabled_wait: function (info) {
-            return info?.type === 's390' && info.reason === 'disabled-wait';
+        // s390x: whether the QEMU VM status data reports a disabled wait apart from a crash, see
+        // render_disabled_wait(). qemu-server only does that for guests that are not Linux: a
+        // Linux kernel panic also ends in a disabled wait, and stays a guest panic.
+        is_disabled_wait: function (data) {
+            return !!data?.['disabled-wait'];
         },
 
         // s390x: the 'disabled-wait' of the QEMU VM status, the instruction address of the
