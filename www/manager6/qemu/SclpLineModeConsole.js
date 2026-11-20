@@ -174,7 +174,31 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
             },
         ];
 
-        me.bbar = [
+        // The command bar: with some room below the field and the button, so that their lower
+        // border stays visible where the panel meets the splitter of the task log (cut
+        // by a few pixels on a node, browser zoom).
+        me.bbar = {
+            itemId: 'commandBar',
+            padding: '6 8 9 8',
+            items: me.commandBarItems(),
+        };
+
+        me.callParent();
+
+        me.on('destroy', () => me.disconnect());
+        // lay out again once the web fonts are there, in case the bar was measured before
+        if (document.fonts?.ready) {
+            document.fonts.ready.then(() => {
+                if (!me.destroyed && me.rendered) {
+                    me.updateLayout();
+                }
+            });
+        }
+    },
+
+    commandBarItems: function () {
+        let me = this;
+        return [
             {
                 xtype: 'textfield',
                 itemId: 'command',
@@ -202,10 +226,6 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
                 handler: () => me.sendCommand(),
             },
         ];
-
-        me.callParent();
-
-        me.on('destroy', () => me.disconnect());
     },
 
     storageKey: function () {
