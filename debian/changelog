@@ -1,3 +1,11 @@
+pve-manager (9.2.32+s390x2) trixie; urgency=medium
+
+  * s390x: pveam takes the container template index of the Proxmox-390
+    repository from <repository>/container-index/, verified with the
+    Proxmox-390 archive key (the old test repository keeps <URL>/images/).
+
+ -- Yvan Janssens <yvanj@cyber.gent>  Fri, 20 Nov 2026 15:47:24 +0100
+
 pve-manager (9.2.32+s390x1) trixie; urgency=medium
 
   * s390x port, rebased onto 9.2.32:
