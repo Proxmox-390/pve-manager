@@ -175,4 +175,168 @@ like(
     'chzdev error passed on',
 );
 
+# setting a device offline: what the node uses
+my $config = <<'EOC';
+auto lo
+iface lo inet loopback
+
+iface enc300 inet manual
+
+auto vmbr0
+iface vmbr0 inet static
+	address 192.0.2.10/24
+	bridge-ports enc300
+# enc603 was a port before
+
+auto enc600.12
+iface enc600.12 inet manual
+EOC
+is(PVE::S390xQeth::config_uses_interface($config, ['enc300']), 'enc300', 'config: bridge port');
+is(PVE::S390xQeth::config_uses_interface($config, ['enc600']), 'enc600', 'config: VLAN on it');
+is(
+    PVE::S390xQeth::config_uses_interface($config, ['enc603', 'enc603d']),
+    undef,
+    'config: comment only',
+);
+is(PVE::S390xQeth::config_uses_interface($config, ['enc30']), undef, 'config: no prefix match');
+is(
+    PVE::S390xQeth::config_uses_interface(
+        "auto bond0\niface bond0 inet manual\n\tbond-slaves enc610,enc613\n",
+        ['enc613'],
+    ),
+    'enc613',
+    'config: bond slave in a list',
+);
+
+# 'ip -json address show': enc610 is the port of vmbr1 with the management address, enc613 has a
+# VLAN with an address, enc620 has a link-local address only
+my $links = [
+    { ifname => 'lo', addr_info => [{ local => '127.0.0.1', scope => 'host' }] },
+    { ifname => 'enc610', master => 'vmbr1', addr_info => [] },
+    { ifname => 'vmbr1', addr_info => [{ local => '192.0.2.10', scope => 'global' }] },
+    { ifname => 'enc613', addr_info => [] },
+    {
+        ifname => 'enc613.20',
+        link => 'enc613',
+        addr_info => [{ local => '2001:db8::5', scope => 'global' }],
+    },
+    { ifname => 'enc620', addr_info => [{ local => 'fe80::1', scope => 'link' }] },
+];
+is_deeply(
+    PVE::S390xQeth::interface_carrying_address($links, ['enc610'], ['192.0.2.10']),
+    ['192.0.2.10', 'vmbr1'],
+    'management address on the bridge of the port',
+);
+is(
+    PVE::S390xQeth::interface_carrying_address($links, ['enc613'], ['192.0.2.10']),
+    undef,
+    'other address on a VLAN: not the management address',
+);
+is_deeply(
+    PVE::S390xQeth::interface_carrying_address($links, ['enc613'], ['2001:DB8::5']),
+    ['2001:db8::5', 'enc613.20'],
+    'management address on a VLAN',
+);
+is_deeply(
+    PVE::S390xQeth::interface_carrying_address($links, ['enc613'], []),
+    ['2001:db8::5', 'enc613.20'],
+    'management address unknown: any global address counts',
+);
+is(PVE::S390xQeth::interface_carrying_address($links, ['enc620'], []), undef, 'link-local only');
+
+my $dev610 = { id => '0.0.0610:0.0.0611:0.0.0612', online => 1, names => ['enc610'] };
+like(
+    PVE::S390xQeth::in_use_reason(
+        { %$dev610, names => ['enc300'] },
+        $config,
+        $links,
+        ['192.0.2.10'],
+    ),
+    qr/its interface enc300 is in the network configuration/,
+    'in use: network configuration',
+);
+like(
+    PVE::S390xQeth::in_use_reason($dev610, '', $links, ['192.0.2.10']),
+    qr/carries the management address 192\.0\.2\.10 of the node \(on vmbr1\)/,
+    'in use: management address',
+);
+is(
+    PVE::S390xQeth::in_use_reason(
+        { %$dev610, names => ['enc620'] },
+        $config,
+        $links,
+        ['192.0.2.10'],
+    ),
+    undef,
+    'not in use',
+);
+is(
+    PVE::S390xQeth::in_use_reason({ %$dev610, names => [] }, $config, $links, []),
+    undef,
+    'no interface',
+);
+
+is_deeply(
+    PVE::S390xQeth::disable_command($dev610),
+    [$PVE::S390xQeth::CHZDEV, '--disable', '--yes', 'qeth', '0.0.0610:0.0.0611:0.0.0612'],
+    'disable command',
+);
+
+# disable(), with lszdev and chzdev mocked: 0300 is in the configuration, 0603 is free
+$chzdev_error = undef;
+$online = {};
+my $offline = {};
+my $net_config = $config;
+$mock->redefine(network_state => sub { return ($net_config, $links, ['192.0.2.10']) });
+$mock->redefine(
+    run_command => sub {
+        my ($cmd, %param) = @_;
+        push @$commands, $cmd;
+        if ($cmd->[0] eq $PVE::S390xQeth::CHZDEV && $cmd->[1] eq '--disable') {
+            $offline->{ $cmd->[4] } = 1;
+            return;
+        }
+        for my $line (split(/\n/, $lszdev)) {
+            my ($id) = $line =~ m/^ID="([^"]+)"/;
+            $line =~ s/ON="yes"/ON="no"/ if $id && $offline->{$id};
+            $param{outfunc}->($line);
+        }
+    },
+);
+$commands = [];
+$res = PVE::S390xQeth::disable('0.0.0603');
+is($res->{online}, 0, 'disable: device offline afterwards');
+is_deeply(
+    $chzdev_calls->(),
+    [[$PVE::S390xQeth::CHZDEV, '--disable', '--yes', 'qeth', '0.0.0603:0.0.0604:0.0.0605']],
+    'disable: chzdev called once for the group',
+);
+for my $case (
+    [
+        '0.0.0300',
+        qr/cannot be set offline: its interface enc300 is in the network configuration/,
+        'used device refused',
+    ],
+    ['0.0.0403', qr/is offline already/, 'offline device refused'],
+    ['0.0.0200', qr/is no qeth device/, 'FCP device refused'],
+    ['0.0.0300 x', qr/invalid qeth device/, 'invalid device refused'],
+) {
+    my ($device, $re, $name) = @$case;
+    $commands = [];
+    eval { PVE::S390xQeth::disable($device) };
+    like($@, $re, "disable: $name");
+    is(scalar($chzdev_calls->()->@*), 0, "disable: $name: chzdev not called");
+}
+$net_config = '';
+eval { PVE::S390xQeth::disable('0.0.0600') };
+is($@, '', 'disable: device without configuration and management address');
+
+# the list: why online devices cannot be set offline
+$offline = {};
+$net_config = $config;
+my $listed = { map { $_->{device} => $_ } PVE::S390xQeth::list_devices_with_usage()->@* };
+like($listed->{'0.0.0300'}->{'in-use'}, qr/enc300/, 'list: device in the configuration');
+ok(!exists($listed->{'0.0.0603'}->{'in-use'}), 'list: free online device');
+ok(!exists($listed->{'0.0.0403'}->{'in-use'}), 'list: offline device');
+
 done_testing();

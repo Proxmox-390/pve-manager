@@ -2347,6 +2347,8 @@ Ext.define('PVE.Utils', {
             qmstop: ['VM', gettext('Stop')],
             qmsuspend: ['VM', gettext('Hibernate')],
             qmtemplate: ['VM', gettext('Convert to template')],
+            qethoffline: ['qeth', gettext('Set offline')],
+            qethonline: ['qeth', gettext('Set online')],
             resize: ['VM/CT', gettext('Resize')],
             reloadnetworkall: ['', gettext('Reload network configuration on all nodes')],
             spiceproxy: ['VM/CT', gettext('Console') + ' (Spice)'],

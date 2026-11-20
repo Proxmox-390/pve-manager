@@ -8,15 +8,23 @@ package PVE::S390xQeth;
 #
 # Only qeth devices: lszdev lists the devices of one type, so FCP and DASD devices (which may carry
 # the root file system of the node) never show up here, and enable() only takes a device lszdev
-# lists as a qeth device that is offline.
+# lists as a qeth device that is offline. disable() sets an online one offline ('chzdev -d', now and
+# persistently), unless the node uses it: an interface of it in the network configuration, or
+# the management address of the node on it.
 
 use strict;
 use warnings;
 
+use JSON;
+
+use PVE::Cluster;
+use PVE::INotify;
 use PVE::Tools qw(run_command);
 
 our $LSZDEV = '/usr/sbin/lszdev';
 our $CHZDEV = '/usr/sbin/chzdev';
+our $IP = '/usr/sbin/ip';
+our $INTERFACES = '/etc/network/interfaces';
 
 # a CCW bus ID, e.g. 0.0.0610 (channel subsystem, subchannel set, device number)
 our $BUSID_RE = qr/[0-9a-f]{1,2}\.[0-3]\.[0-9a-f]{4}/;
@@ -127,6 +135,176 @@ sub enable {
     if (my $err = $@) {
         $errors =~ s/\s+$//;
         die "setting qeth device $dev->{id} online failed: " . ($errors ne '' ? "$errors\n" : $err);
+    }
+
+    return find_device(list_devices(), $dev->{id}) // $dev;
+}
+
+# The command that sets a qeth device offline, now and persistently.
+sub disable_command {
+    my ($dev) = @_;
+    return [$CHZDEV, '--disable', '--yes', 'qeth', $dev->{id}];
+}
+
+# The interface of @$names (the interfaces of a qeth device) that the network configuration
+# $text (/etc/network/interfaces and the files it sources) uses, or undef: as an interface of its
+# own, a VLAN on it (<name>.<tag>) or a port, slave or raw device of another interface. Comments do
+# not count.
+sub config_uses_interface {
+    my ($text, $names) = @_;
+
+    my $wanted = { map { $_ => 1 } @$names };
+    for my $line (split(/\n/, $text // '')) {
+        $line =~ s/#.*$//;
+        for my $token (split(/[\s,]+/, $line)) {
+            my $name = $token =~ s/\.\d+$//r; # a VLAN on the interface
+            return $name if $wanted->{$name};
+        }
+    }
+    return undef;
+}
+
+# The network configuration of the node: /etc/network/interfaces and the files in
+# /etc/network/interfaces.d, which it usually sources.
+sub read_network_config {
+    my $text = '';
+    for my $file ($INTERFACES, glob('/etc/network/interfaces.d/*')) {
+        next if !-f $file;
+        $text .= PVE::Tools::file_get_contents($file) . "\n";
+    }
+    return $text;
+}
+
+# Which address of @$addresses (the management addresses of the node) the interfaces @$names
+# carry, or the interfaces stacked on them: a bridge they are ports of, a VLAN or bond on them,
+# and so on. $links: the output of 'ip -json address show', decoded. Returns
+# [<address>, <interface>] or undef. Without known management addresses, any global address
+# counts as one.
+sub interface_carrying_address {
+    my ($links, $names, $addresses) = @_;
+
+    my $set = { map { $_ => 1 } @$names };
+    # interfaces stacked on the set: VLANs ('link') and ports' bridges or bonds ('master')
+    my $changed = 1;
+    while ($changed) {
+        $changed = 0;
+        for my $link (@$links) {
+            my $name = $link->{ifname} // next;
+            my $add = [];
+            push @$add, $name
+                if !$set->{$name} && defined($link->{link}) && $set->{ $link->{link} };
+            push @$add, $link->{master}
+                if $set->{$name} && defined($link->{master}) && !$set->{ $link->{master} };
+            for my $new (@$add) {
+                $set->{$new} = 1;
+                $changed = 1;
+            }
+        }
+    }
+
+    my $wanted = { map { lc($_) => 1 } @{ $addresses // [] } };
+    for my $link (@$links) {
+        next if !$set->{ $link->{ifname} // '' };
+        for my $addr (@{ $link->{addr_info} // [] }) {
+            my $local = $addr->{local} // next;
+            if (%$wanted) {
+                return [$local, $link->{ifname}] if $wanted->{ lc($local) };
+            } elsif (($addr->{scope} // '') eq 'global') {
+                return [$local, $link->{ifname}];
+            }
+        }
+    }
+    return undef;
+}
+
+# The management addresses of the node: the address the cluster uses for it (from the cluster
+# configuration or its host name).
+sub management_addresses {
+    my $nodename = PVE::INotify::nodename();
+    my $ip = eval { PVE::Cluster::remote_node_ip($nodename, 1) };
+    return [$ip] if $ip;
+    return [];
+}
+
+# Why the online qeth device $dev cannot be set offline: the node uses it. Undef if it can.
+# $config: the network configuration (see read_network_config()), $links: see
+# interface_carrying_address(), $addresses: the management addresses of the node.
+sub in_use_reason {
+    my ($dev, $config, $links, $addresses) = @_;
+
+    my $names = $dev->{names} // [];
+    return undef if !@$names;
+    if (my $name = config_uses_interface($config, $names)) {
+        return "its interface $name is in the network configuration of the node"
+            . " (/etc/network/interfaces), remove it there first";
+    }
+    if (my $carrier = interface_carrying_address($links, $names, $addresses)) {
+        my ($address, $iface) = @$carrier;
+        return "it carries the management address $address of the node"
+            . ($iface ne $names->[0] ? " (on $iface)" : '');
+    }
+    return undef;
+}
+
+# The network state for in_use_reason(): the network configuration, the links with their
+# addresses, the management addresses.
+sub network_state {
+    my $json = '';
+    eval {
+        run_command(
+            [$IP, '-json', 'address', 'show'],
+            outfunc => sub { $json .= "$_[0]\n" },
+            timeout => 10,
+        );
+    };
+    my $links = eval { decode_json($json) } // [];
+    return (read_network_config(), $links, management_addresses());
+}
+
+# The qeth devices of the node (see list_devices()), each online one with 'in-use': why it
+# cannot be set offline, if so.
+sub list_devices_with_usage {
+    my $devices = list_devices();
+    return $devices if !grep { $_->{online} } @$devices;
+
+    my @state = network_state();
+    for my $dev (@$devices) {
+        next if !$dev->{online};
+        my $reason = in_use_reason($dev, @state);
+        $dev->{'in-use'} = $reason if defined($reason);
+    }
+    return $devices;
+}
+
+# Set the online qeth device $device (group ID or read device) offline, persistently ('chzdev -d':
+# its network interface goes away). Refuses devices that lszdev does not list as qeth devices,
+# devices that are offline already and devices the node uses (see in_use_reason()).
+sub disable {
+    my ($device) = @_;
+
+    die "invalid qeth device '$device'\n"
+        if $device !~ m/^(?:$GROUP_RE|$BUSID_RE)$/i;
+
+    my $dev = find_device(list_devices(), $device)
+        or die "'$device' is no qeth device of this node\n";
+    die "qeth device $dev->{id} is offline already\n" if !$dev->{online};
+    if (my $reason = in_use_reason($dev, network_state())) {
+        die "qeth device $dev->{id} cannot be set offline: $reason\n";
+    }
+
+    my $errors = '';
+    eval {
+        run_command(
+            disable_command($dev),
+            outfunc => sub { },
+            errfunc => sub { $errors .= "$_[0]\n" },
+            timeout => 120,
+        );
+    };
+    if (my $err = $@) {
+        $errors =~ s/\s+$//;
+        die "setting qeth device $dev->{id} offline failed: "
+            . ($errors ne '' ? "$errors\n" : $err);
     }
 
     return find_device(list_devices(), $dev->{id}) // $dev;
