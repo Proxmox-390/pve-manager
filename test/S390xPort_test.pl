@@ -98,6 +98,67 @@ is(
     'no port repository',
 );
 
+# the container template index of the repository
+my $aplinfo = \&PVE::S390xPort::repository_aplinfo_source;
+is_deeply(
+    $aplinfo->(PVE::S390xPort::find_repository($info)),
+    {
+        host => 's390x-port',
+        url => 'https://mirror.example/proxmox-390/container-index',
+        file => 'aplinfo-pve-9-s390x.dat',
+        keyring => '/usr/share/keyrings/proxmox-390-archive-keyring.gpg',
+    },
+    'template index of the repository found by its source file',
+);
+is_deeply(
+    $aplinfo->({
+        uri => 'https://proxmox-390-apt.legitimatebusiness.be',
+        keyring => '/usr/share/keyrings/proxmox-390-archive-keyring.gpg',
+        enabled => 1,
+    }),
+    {
+        host => 's390x-port',
+        url => 'https://proxmox-390-apt.legitimatebusiness.be/container-index',
+        file => 'aplinfo-pve-9-s390x.dat',
+        keyring => '/usr/share/keyrings/proxmox-390-archive-keyring.gpg',
+    },
+    'template index of the public repository',
+);
+is(
+    $aplinfo->({
+        uri => 'http://mirror.example/p',
+        keyring => '/etc/apt/keyrings/mirror-keyring.gpg',
+        enabled => 1,
+    })->{keyring},
+    '/usr/share/keyrings/proxmox-390-archive-keyring.gpg',
+    'template index of a mirror signed with another key: the Proxmox-390 key',
+);
+is_deeply(
+    $aplinfo->({
+        uri => 'http://old.example/proxport',
+        keyring => '/usr/share/keyrings/proxport-archive-keyring.gpg',
+        enabled => 1,
+    }),
+    {
+        host => 's390x-port',
+        url => 'http://old.example/proxport/images',
+        file => 'aplinfo-pve-9-s390x.dat',
+        keyring => '/usr/share/keyrings/proxport-archive-keyring.gpg',
+    },
+    'template index of the old test repository: old place, its own key',
+);
+is($aplinfo->(undef), undef, 'no repository, no template index');
+is(
+    $aplinfo->({ uri => 'https://mirror.example/p', keyring => 'k', enabled => 0 }),
+    undef,
+    'disabled repository, no template index',
+);
+is(
+    $aplinfo->({ uri => 'file:/srv/repo', keyring => 'k', enabled => 1 }),
+    undef,
+    'local repository, no template index',
+);
+
 # the source file and the Ceph repository derived from it
 my $dir = tempdir(CLEANUP => 1);
 is(PVE::S390xPort::sources_file($dir), undef, 'no source file');

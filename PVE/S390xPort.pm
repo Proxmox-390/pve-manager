@@ -13,9 +13,10 @@ package PVE::S390xPort;
 #   - The APT repository API lists it as the standard repository 's390x-port', so that the node
 #     summary and the Repositories panel know a Proxmox VE repository is configured.
 #   - Its container template index (aplinfo) is published next to it, at
-#     <repository URL>/images/aplinfo-pve-9-s390x.dat (.gz, signed .asc), signed with the key of
-#     the repository; pveam uses it instead of Proxmox's and TurnKey's indexes, which have no
-#     s390x templates.
+#     <repository URL>/container-index/aplinfo-pve-9-s390x.dat (.gz, signed .asc), signed with
+#     the Proxmox-390 archive key; pveam uses it instead of Proxmox's and TurnKey's indexes, which
+#     have no s390x templates. The port's test repository (signed with the proxport key) has it at
+#     <repository URL>/images/, signed with its own key.
 
 use strict;
 use warnings;
@@ -35,6 +36,10 @@ our @KEYRINGS = ('proxmox-390-archive-keyring.gpg', 'proxport-archive-keyring.gp
 our @ORIGINS = ('proxmox-390', 'proxport');
 our @SOURCE_FILES = ('proxmox-390.sources', 'proxport.sources');
 our $APLINFO_FILE = 'aplinfo-pve-9-s390x.dat';
+our $APLINFO_DIR = 'container-index';
+# the test repository: its own key, the index in <URL>/images
+our $OLD_KEYRING = 'proxport-archive-keyring.gpg';
+our $OLD_APLINFO_DIR = 'images';
 
 sub is_s390x {
     return PVE::Tools::get_host_arch() eq 's390x';
@@ -121,14 +126,25 @@ sub aplinfo_source {
         warn "unable to read the APT repositories - $err";
         return undef;
     }
-    my $repo = find_repository($info);
+    return repository_aplinfo_source(find_repository($info));
+}
+
+# The template index of a repository entry as returned by find_repository(), or undef if it is
+# missing, disabled or not served over HTTP(S). The index is signed with the Proxmox-390 archive
+# key, whichever host serves it, so it is verified with $KEYRING; only a repository signed with
+# the key of the old test repository (keyring $OLD_KEYRING) has its index in the old place,
+# signed with that key.
+sub repository_aplinfo_source {
+    my ($repo) = @_;
+
     return undef if !$repo || !$repo->{enabled} || $repo->{uri} !~ m|^https?://|;
 
+    my $old = basename($repo->{keyring} // '') eq $OLD_KEYRING;
     return {
         host => $REPO_HANDLE, # the name of the cached index in the apl-info directory
-        url => "$repo->{uri}/images",
+        url => "$repo->{uri}/" . ($old ? $OLD_APLINFO_DIR : $APLINFO_DIR),
         file => $APLINFO_FILE,
-        keyring => $repo->{keyring},
+        keyring => $old ? $repo->{keyring} : $KEYRING,
     };
 }
 
