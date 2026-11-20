@@ -186,7 +186,7 @@ Ext.define('PVE.node.Config', {
                     onlineHelp: 'pve_service_daemons',
                 },
                 {
-                    xtype: 'proxmoxNodeNetworkView',
+                    xtype: 'pveNodeNetworkView',
                     title: gettext('Network'),
                     iconCls: 'fa fa-exchange',
                     itemId: 'network',
