@@ -5,7 +5,7 @@ all:
 export PERLLIB=..
 
 .PHONY: check
-check: test-replication test-balloon test-vzdump test-osd test-ceph-health test-ceph-services test-ceph-auth test-ceph-key-migration test-ceph-lockbox-migration test-custom-cpu-models test-pvesh test-s390x-sysinfo test-s390x-qeth test-report test-access-log
+check: test-replication test-balloon test-vzdump test-osd test-ceph-health test-ceph-services test-ceph-auth test-ceph-key-migration test-ceph-lockbox-migration test-custom-cpu-models test-pvesh test-s390x-sysinfo test-s390x-qeth test-s390x-port test-report test-access-log
 
 .PHONY: test-balloon
 test-balloon:
@@ -83,3 +83,7 @@ install:
 .PHONY: clean
 clean:
 	rm -rf *~ .mocked_* *.tmp
+
+.PHONY: test-s390x-port
+test-s390x-port:
+	./S390xPort_test.pl
