@@ -161,6 +161,16 @@ Ext.define('PVE.qemu.S390xConsole', {
             return; // not loaded yet
         }
         let running = status === 'running';
+        // A new QEMU process (a start, a rollback to a snapshot with RAM, a resume from
+        // hibernation) between two polls: the 3270 sessions were restarted with it, so the
+        // connected terminal shows the old, ended session. Reconnect it.
+        let pid = running ? me.statusStore.getById('pid')?.data.value : undefined;
+        let restarted = running && me.vmRunning && pid && me.vmPid && pid !== me.vmPid;
+        me.vmPid = pid;
+        if (restarted) {
+            me.reconnectTerminal();
+            return;
+        }
         if (running === me.vmRunning) {
             return;
         }
@@ -232,6 +242,16 @@ Ext.define('PVE.qemu.S390xConsole', {
             return;
         }
         tab.down('#frame').load('about:blank');
+    },
+
+    // reconnect the shown 3270 or VT220 terminal, if connected
+    reconnectTerminal: function () {
+        let me = this;
+        let tab = me.getActiveTab();
+        if (tab?.consoleLoaded && !tab.isSclpLineModeConsole) {
+            me.unloadConsole(tab);
+            me.loadConsole(tab);
+        }
     },
 
     // reconnect the shown console, used when the VM was (re)started

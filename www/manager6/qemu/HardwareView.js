@@ -421,8 +421,7 @@ Ext.define('PVE.qemu.HardwareView', {
         for (let i = 0; i < PVE.Utils.hardware_counts.terminal; i++) {
             let confid = 'terminal' + i.toString();
             rows[confid] = {
-                group: 37,
-                order: i,
+                group: 37, // by device number, see sorterFn
                 iconCls: 'terminal',
                 editor: caps.vms['VM.Config.HWType'] ? 'PVE.qemu.TerminalEdit' : undefined,
                 never_delete: !caps.vms['VM.Config.HWType'],
@@ -430,6 +429,49 @@ Ext.define('PVE.qemu.HardwareView', {
                 renderer: PVE.qemu.Architecture.renderTerminal,
             };
         }
+        // the integrated (SCLP) 3270 console of mainframe OSes: its model, next to the 3270
+        // terminals (see the OS type rule below)
+        let sclp3270ModelKey = PVE.qemu.Architecture.sclp3270ModelKey;
+        rows[sclp3270ModelKey] = {
+            group: 36,
+            iconCls: 'terminal',
+            header: gettext('SCLP 3270 Console'),
+            required: true,
+            visible: false,
+            defaultValue: '',
+            never_delete: true,
+            renderer: PVE.qemu.Architecture.renderSclp3270Model,
+            editor: caps.vms['VM.Config.HWType']
+                ? {
+                      xtype: 'proxmoxWindowEdit',
+                      subject: gettext('SCLP 3270 Console'),
+                      width: 400,
+                      items: [
+                          {
+                              xtype: 'proxmoxKVComboBox',
+                              name: sclp3270ModelKey,
+                              fieldLabel: gettext('Model'),
+                              value: '__default__',
+                              deleteEmpty: true,
+                              comboItems: [
+                                  [
+                                      '__default__',
+                                      PVE.qemu.Architecture.renderSclp3270Model(undefined),
+                                  ],
+                                  ...PVE.qemu.Architecture.terminalModels,
+                              ],
+                          },
+                          {
+                              xtype: 'displayfield',
+                              userCls: 'pmx-hint',
+                              value: gettext(
+                                  'The 3270 model of the integrated console of the operating system. Applies at the next start.',
+                              ),
+                          },
+                      ],
+                  }
+                : undefined,
+        };
         rows.audio0 = {
             group: 40,
             iconCls: 'volume-up',
@@ -469,6 +511,14 @@ Ext.define('PVE.qemu.HardwareView', {
             };
         }
 
+        // the device number of a disk (devno=) or 3270 terminal (its first property) row
+        let devnoOfRow = function (group, rec) {
+            let value = rec.data.value ?? rec.data.pending ?? '';
+            return group === 37
+                ? PVE.Parser.parsePropertyString(value, 'devno').devno
+                : PVE.qemu.Architecture.getDriveDevno(value);
+        };
+
         var sorterFn = function (rec1, rec2) {
             var v1 = rec1.data.key;
             var v2 = rec2.data.key;
@@ -483,6 +533,23 @@ Ext.define('PVE.qemu.HardwareView', {
 
             if (order1 - order2 !== 0) {
                 return order1 - order2;
+            }
+
+            // s390x: DASDs and 3270 terminals by device number, then the others by bus and
+            // index (ckd2 before ckd10)
+            if (g1 === 10 || g1 === 37) {
+                let byDevno = PVE.qemu.Architecture.compareDevnos(
+                    devnoOfRow(g1, rec1),
+                    devnoOfRow(g2, rec2),
+                );
+                if (byDevno !== 0) {
+                    return byDevno;
+                }
+                let [, bus1, index1] = v1.match(/^(\D+)(\d+)$/) ?? [];
+                let [, bus2, index2] = v2.match(/^(\D+)(\d+)$/) ?? [];
+                if (bus1 && bus1 === bus2) {
+                    return parseInt(index1, 10) - parseInt(index2, 10);
+                }
             }
 
             if (v1 > v2) {
@@ -1111,6 +1178,22 @@ Ext.define('PVE.qemu.HardwareView', {
         me.on('destroy', me.rstore.stopUpdate, me.rstore);
 
         me.mon(me.getStore(), 'datachanged', set_button_status, me);
+
+        if (isS390x) {
+            // OS type rule: only mainframe OSes have the integrated 3270 console
+            me.mon(me.rstore, 'load', function () {
+                let ostype = me.getObjectValue('ostype', undefined, true);
+                let visible = !PVE.qemu.Architecture.isS390xLinux(ostype);
+                if (rows[sclp3270ModelKey].visible !== visible) {
+                    rows[sclp3270ModelKey].visible = visible;
+                    // apply the row filter again (store.filter() without a filter does not)
+                    let filters = me.getStore().getFilters();
+                    let rowFilters = filters.getRange();
+                    filters.removeAll();
+                    filters.add(rowFilters);
+                }
+            });
+        }
 
         me.mon(me.getStore(), 'datachanged', function () {
             if (!me.pendingVolid) {

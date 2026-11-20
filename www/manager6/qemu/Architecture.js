@@ -110,42 +110,59 @@ Ext.define('PVE.qemu.Architecture', {
     },
 
     // The consoles qemu-server attaches to an s390x VM, which has no VGA display, as xterm.js
-    // serial terminal interfaces, from the VM config, the one of the operating system first. By
-    // OS type, Linux uses the VT220 SCLP console. Other (mainframe) OSes use one of the 3270
-    // terminals as system console, so these come first, named and ordered by their device
-    // number, followed by the line-mode SCLP console and the integrated (SCLP) 3270 console. The
-    // 3270 ones have the 3270 model they emulate as 'model'.
+    // serial terminal interfaces, from the VM config, in the order of the console tab and the
+    // console menu: by OS type, other (mainframe) OSes get the line-mode SCLP console and the
+    // integrated (SCLP) 3270 console, Linux the VT220 SCLP console (xterm.js) and its serial
+    // ports on a socket; then the configured 3270 terminals, named and ordered by their device number. The 3270 ones have
+    // the 3270 model they emulate as 'model'.
     getS390xConsoles: function (conf) {
+        let arch = PVE.qemu.Architecture;
         let terminals = [];
         for (let i = 0; i < PVE.Utils.hardware_counts.terminal; i++) {
             let key = `terminal${i}`;
             if (conf[key]) {
                 let terminal = PVE.Parser.parsePropertyString(conf[key], 'devno');
-                let [ssid, number] = PVE.qemu.Architecture.splitCcwDevno(terminal.devno ?? '');
+                let [ssid, number] = arch.splitCcwDevno(terminal.devno ?? '');
                 terminals.push({
                     serial: key,
                     text: number !== undefined ? `3270 0.${ssid}.${number}` : `3270 ${key}`,
-                    model: terminal.model ?? '2',
-                    order: number !== undefined ? parseInt(ssid + number, 16) : Infinity,
+                    model: terminal.model ?? arch.defaultTerminalModel,
+                    devno: terminal.devno,
+                    index: i,
                 });
             }
         }
-        terminals.sort((a, b) => a.order - b.order);
+        // by device number, terminals without one last (by their key)
+        terminals.sort((a, b) => arch.compareDevnos(a.devno, b.devno) || a.index - b.index);
         terminals = terminals.map(({ serial, text, model }) => ({ serial, text, model }));
 
-        if (PVE.qemu.Architecture.isS390xLinux(conf.ostype)) {
-            return [{ serial: 'sclp', text: 'xterm.js' }, ...terminals];
+        if (arch.isS390xLinux(conf.ostype)) {
+            // the ASCII consoles: the VT220 SCLP console, the (VirtIO) serial ports on a socket
+            let serials = [];
+            for (let i = 0; i < PVE.Utils.hardware_counts.serial; i++) {
+                if (conf[`serial${i}`] === 'socket') {
+                    serials.push({ serial: `serial${i}`, text: `${gettext('Serial Port')} ${i}` });
+                }
+            }
+            return [{ serial: 'sclp', text: 'xterm.js' }, ...serials, ...terminals];
         }
         return [
-            ...terminals,
             { serial: 'sclplm', text: gettext('SCLP line mode') },
-            // qemu-server always emulates a model 2 for it
-            { serial: '3270', text: gettext('SCLP 3270 console'), model: '2' },
+            {
+                serial: '3270',
+                text: gettext('SCLP 3270 console'),
+                model: conf[arch.sclp3270ModelKey] ?? arch.defaultTerminalModel,
+            },
+            ...terminals,
         ];
     },
 
+    // The config key of the 3270 model of the integrated (SCLP) 3270 console of a mainframe OS
+    // (qemu-server, s390x).
+    sclp3270ModelKey: 'sclp3270-model',
+
     // The models of 3270 terminals (s390x), with their screen sizes. qemu-server emulates a
-    // model 2 for terminals without one.
+    // model 4 for terminals and the integrated 3270 console without one.
     terminalModels: [
         ['2', gettext('Model 2 (24x80)')],
         ['3', gettext('Model 3 (32x80)')],
@@ -153,12 +170,43 @@ Ext.define('PVE.qemu.Architecture', {
         ['5', gettext('Model 5 (27x132)')],
     ],
 
-    defaultTerminalModel: '2',
+    defaultTerminalModel: '4',
 
     renderTerminalModel: function (model) {
         model = model ?? PVE.qemu.Architecture.defaultTerminalModel;
         let entry = PVE.qemu.Architecture.terminalModels.find(([key]) => key === model);
         return entry ? entry[1] : `${gettext('Model')} ${model}`;
+    },
+
+    // the model of the integrated 3270 console, "Default (Model 4 (43x80))" if not set
+    renderSclp3270Model: function (model) {
+        let arch = PVE.qemu.Architecture;
+        if (!model) {
+            return `${Proxmox.Utils.defaultText} (${arch.renderTerminalModel(arch.defaultTerminalModel)})`;
+        }
+        return Ext.htmlEncode(arch.renderTerminalModel(model));
+    },
+
+    // The device number of a drive config entry ("...,devno=0.0.0300,..."), if it has one.
+    getDriveDevno: function (value) {
+        return (value ?? '').match(/(?:^|,)devno=([^,]+)/)?.[1];
+    },
+
+    // Compare two CCW device numbers ("0.0.0300", "0300"), for sorting: in numeric order,
+    // device numbers before missing or invalid ones. 0 if equal or both missing.
+    compareDevnos: function (devno1, devno2) {
+        let key = (devno) => {
+            let [ssid, number] = PVE.qemu.Architecture.splitCcwDevno(devno ?? '');
+            return number !== undefined
+                ? parseInt(ssid, 16) * 0x10000 + parseInt(number, 16)
+                : Infinity;
+        };
+        let k1 = key(devno1);
+        let k2 = key(devno2);
+        if (k1 === k2) {
+            return 0;
+        }
+        return k1 < k2 ? -1 : 1;
     },
 
     // "0.0.0700, Model 2 (24x80)": the address and model of a 3270 terminal config entry
