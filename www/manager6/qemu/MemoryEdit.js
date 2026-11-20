@@ -16,6 +16,29 @@ Ext.define('PVE.qemu.MemoryInputPanel', {
             },
         },
 
+        init: function (view) {
+            let me = this;
+            if (view.insideWizard) {
+                // s390x: mainframe OSes have no balloon driver, qemu-server adds no balloon
+                // device for them by default
+                me.getViewModel().bind(
+                    {
+                        ostype: '{current.ostype}',
+                        arch: '{current.architecture}',
+                        nodename: '{nodename}',
+                    },
+                    ({ ostype, arch, nodename }) => {
+                        let noBalloon = PVE.qemu.MemoryInputPanel.noDefaultBalloon(
+                            arch,
+                            ostype,
+                            nodename,
+                        );
+                        view.down('field[name=ballooning]')?.setValue(!noBalloon);
+                    },
+                );
+            }
+        },
+
         setMemory: function () {
             let me = this;
             let view = me.getView(),
@@ -29,6 +52,15 @@ Ext.define('PVE.qemu.MemoryInputPanel', {
                     memory.setValue('2048');
                 }
             }
+        },
+    },
+
+    statics: {
+        // Whether a VM of this architecture and OS type gets no balloon device without a
+        // 'balloon' setting: s390x VMs of mainframe OSes (qemu-server), which have no driver.
+        noDefaultBalloon: function (arch, ostype, nodename) {
+            let guestArch = PVE.qemu.Architecture.getGuestArchitecture(arch, nodename);
+            return guestArch === 's390x' && !PVE.qemu.Architecture.isS390xLinux(ostype);
         },
     },
 
@@ -210,8 +242,16 @@ Ext.define('PVE.qemu.MemoryEdit', {
             success: function (response, options) {
                 var data = response.result.data;
 
+                let noBalloon =
+                    data.balloon === 0 ||
+                    (data.balloon === undefined &&
+                        PVE.qemu.MemoryInputPanel.noDefaultBalloon(
+                            data.arch,
+                            data.ostype,
+                            me.pveSelNode?.data.node,
+                        ));
                 var values = {
-                    ballooning: data.balloon === 0 ? '0' : '1',
+                    ballooning: noBalloon ? '0' : '1',
                     shares: data.shares,
                     memory: data.memory || '512',
                     balloon: data.balloon > 0 ? data.balloon : data.memory || '512',

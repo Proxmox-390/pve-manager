@@ -143,6 +143,53 @@ Ext.define('PVE.qemu.HDInputPanel', {
         return params;
     },
 
+    statics: {
+        // the disk images the import of a disk takes (not OVA/OVF appliances)
+        isImportableImage: function (volume) {
+            return ['qcow2', 'vmdk', 'raw'].includes(volume?.format);
+        },
+    },
+
+    // Preselect the import storage, unless one is selected: the first that has disk images to
+    // import, else the first one (an empty 'local' is not useful when another storage has the
+    // images).
+    selectImportStorage: function (selector) {
+        let me = this;
+        let storages = selector
+            .getStore()
+            .getRange()
+            .map((rec) => rec.data.storage);
+        if (selector.getValue() || !storages.length || me.importStorageQuery) {
+            return;
+        }
+        let nodename = selector.nodename;
+        let query = (me.importStorageQuery = Promise.all(
+            storages.map((storage) =>
+                Proxmox.Async.api2({
+                    url: `/nodes/${nodename}/storage/${storage}/content`,
+                    method: 'GET',
+                    params: { content: 'import' },
+                })
+                    .then(({ result }) =>
+                        (result.data ?? []).some((volume) =>
+                            PVE.qemu.HDInputPanel.isImportableImage(volume),
+                        ),
+                    )
+                    .catch(() => false),
+            ),
+        ));
+        query.then((hasImages) => {
+            if (me.importStorageQuery === query) {
+                delete me.importStorageQuery;
+            }
+            if (selector.destroyed || selector.getValue()) {
+                return;
+            }
+            let index = hasImages.indexOf(true);
+            selector.setValue(storages[index >= 0 ? index : 0]);
+        });
+    },
+
     updateVMConfig: function (vmconfig) {
         var me = this;
         me.vmconfig = vmconfig;
@@ -318,12 +365,18 @@ Ext.define('PVE.qemu.HDInputPanel', {
                         name: 'import-source-storage',
                         storageContent: 'import',
                         nodename: me.nodename,
-                        autoSelect: me.insideWizard,
+                        autoSelect: false, // see selectImportStorage()
                         disabled: false,
                         listeners: {
                             change: function (_selector, storage) {
                                 me.lookup('import-source-file').setStorage(storage);
                                 me.lookup('import-source-file').setDisabled(!storage);
+                            },
+                            afterrender: function (selector) {
+                                me.mon(selector.getStore(), 'load', () =>
+                                    me.selectImportStorage(selector),
+                                );
+                                me.selectImportStorage(selector);
                             },
                         },
                     });
@@ -333,7 +386,7 @@ Ext.define('PVE.qemu.HDInputPanel', {
                         fieldLabel: gettext('Select Image'),
                         storageContent: 'import',
                         name: 'import-from',
-                        filter: (rec) => ['qcow2', 'vmdk', 'raw'].indexOf(rec?.data?.format) !== -1,
+                        filter: (rec) => PVE.qemu.HDInputPanel.isImportableImage(rec?.data),
                         nodename: me.nodename,
                         listeners: {
                             change: (_field, value) => me.selectBusForImage(value),

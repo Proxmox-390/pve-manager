@@ -1,5 +1,5 @@
 // The settings of an s390x DASD (config keys fbaN and ckdN) in the hard disk dialog: device number,
-// for a new CKD volume the 3390 model or cylinders, and the name of a new volume.
+// for a new CKD volume the 3390 model or cylinders, and the name of a new or imported volume.
 Ext.define('PVE.qemu.DASDFields', {
     extend: 'Ext.container.Container',
     alias: 'widget.pveQemuDASDFields',
@@ -107,7 +107,13 @@ Ext.define('PVE.qemu.DASDFields', {
             devno.setKind(kind);
         }
         let name = me.down('field[name=dasdName]');
-        name.setDisabled(!kind || !me.isCreate || me.importDisk);
+        name.setDisabled(!kind || !me.isCreate);
+        // an imported CKD image keeps its volume serial as name by default (qemu-server)
+        name.setEmptyText(
+            me.importDisk && kind === 'ckd'
+                ? gettext('Default: VOLSER of the image')
+                : gettext('automatic'),
+        );
         let ckdCreate = kind === 'ckd' && me.isCreate && !me.importDisk;
         for (const field of me.query('[ckdCreate]')) {
             field.setVisible(ckdCreate);
@@ -256,8 +262,8 @@ Ext.define('PVE.qemu.DASDFields', {
                 xtype: 'textfield',
                 name: 'dasdName',
                 fieldLabel: gettext('Name'),
-                hidden: !me.isCreate || me.importDisk,
-                disabled: !me.isCreate || me.importDisk,
+                hidden: !me.isCreate,
+                disabled: !me.isCreate,
                 allowBlank: true,
                 emptyText: gettext('automatic'),
                 maxLength: 40,
