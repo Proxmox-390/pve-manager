@@ -1,3 +1,41 @@
+pve-manager (9.2.32+s390x1) trixie; urgency=medium
+
+  * s390x port, rebased onto 9.2.32:
+    - architecture support: s390x in the host-arch enum, vCPU architecture
+      defaults, s390x container templates, no SPICE; the VM wizard and the
+      hardware view offer what an s390x machine has (mainframe machine types
+      and their versions, devices of the machine class, PC options hidden,
+      no vCPU architecture, NUMA or vCPU hotplug), changes waiting for a
+      restart are marked.
+    - consoles: the SCLP line-mode console (hardcopy view of its log, log
+      files, command bar, syslog forwarding option) and the integrated 3270
+      console and 3270 terminals, one tab per console, opened from the
+      console button, the resource tree and the VM menu, at the 3270 model
+      size.
+    - CCW devices: device number field, FBA and CKD DASDs (models, no CKD
+      resize, local ZFS/LVM storage preferred, Hercules image import), tape
+      drives and network boot as install media, qeth network adapters
+      (devices, address errors), 3270 terminals with a model each; IPL
+      device and load parameter in the wizard and the options.
+    - VM summary: crash information of a panicked guest; a disabled wait of
+      a guest that is not Linux is shown neutrally as "Disabled wait (PSW
+      ...)" (pvestatd status 'disabled-wait'), a Linux kernel panic stays a
+      red guest panic.
+    - OVA export (with the tape media) and guest import improvements: drive
+      options of the import metadata, file based working storages, tape
+      media, new MAC addresses.
+    - node: serial number, environment and IPL mode of s390x nodes; qeth
+      devices online and offline as tasks; pveperf BogoMIPS.
+    - repositories: the port's repository and container template index,
+      pve-enterprise.sources shipped disabled, swtpm only listed if
+      installed; Ceph: the releases built for s390x, the port's Ceph
+      repositories, client.admin usable for older kernel clients.
+    - packaging: spiceterm only recommended; depend on the s390x builds of
+      libpve-storage-perl, proxmox-widget-toolkit, pve-xtermjs and
+      qemu-server.
+
+ -- Yvan Janssens <yvanj@cyber.gent>  Fri, 20 Nov 2026 14:41:16 +0100
+
 pve-manager (9.2.32) trixie; urgency=medium
 
   * ui: storage: drop the technology preview hint of snapshots as volume
