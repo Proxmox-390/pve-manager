@@ -66,11 +66,43 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
             },
         ];
 
-        me.tbar = [
+        // narrow panels (a 1024 px window): what does not fit goes to an overflow menu
+        me.tbar = {
+            overflowHandler: 'menu',
+            items: me.toolbarItems(),
+        };
+
+        // The command bar: with some room below the field and the button, so that their lower
+        // border stays visible where the panel meets the splitter of the task log (cut
+        // by a few pixels on a node, browser zoom).
+        me.bbar = {
+            itemId: 'commandBar',
+            padding: '6 8 9 8',
+            items: me.commandBarItems(),
+        };
+
+        me.callParent();
+
+        me.on('destroy', () => me.disconnect());
+        // lay out again once the web fonts are there, in case the bar was measured before
+        if (document.fonts?.ready) {
+            document.fonts.ready.then(() => {
+                if (!me.destroyed && me.rendered) {
+                    me.updateLayout();
+                }
+            });
+        }
+    },
+
+    toolbarItems: function () {
+        let me = this;
+        return [
             {
                 xtype: 'combobox',
                 itemId: 'fileSel',
-                width: 260,
+                width: 200,
+                matchFieldWidth: false,
+                listConfig: { minWidth: 200 },
                 editable: false,
                 queryMode: 'local',
                 displayField: 'text',
@@ -126,7 +158,7 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
                 xtype: 'textfield',
                 itemId: 'search',
                 emptyText: gettext('Search'),
-                width: 200,
+                width: 160,
                 enableKeyEvents: true,
                 listeners: {
                     change: {
@@ -145,11 +177,13 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
             {
                 iconCls: 'fa fa-chevron-up',
                 tooltip: gettext('Previous match'),
+                overflowText: gettext('Previous match'),
                 handler: () => me.gotoMatch(-1),
             },
             {
                 iconCls: 'fa fa-chevron-down',
                 tooltip: gettext('Next match'),
+                overflowText: gettext('Next match'),
                 handler: () => me.gotoMatch(1),
             },
             {
@@ -173,27 +207,6 @@ Ext.define('PVE.qemu.SclpLineModeConsole', {
                 handler: () => me.scrollToEnd(),
             },
         ];
-
-        // The command bar: with some room below the field and the button, so that their lower
-        // border stays visible where the panel meets the splitter of the task log (cut
-        // by a few pixels on a node, browser zoom).
-        me.bbar = {
-            itemId: 'commandBar',
-            padding: '6 8 9 8',
-            items: me.commandBarItems(),
-        };
-
-        me.callParent();
-
-        me.on('destroy', () => me.disconnect());
-        // lay out again once the web fonts are there, in case the bar was measured before
-        if (document.fonts?.ready) {
-            document.fonts.ready.then(() => {
-                if (!me.destroyed && me.rendered) {
-                    me.updateLayout();
-                }
-            });
-        }
     },
 
     commandBarItems: function () {
